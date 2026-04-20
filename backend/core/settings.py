@@ -76,7 +76,8 @@ DATABASES = {
 }
 
 # Auth
-#AUTH_USER_MODEL = 'users.User'   # We'll define our custom user in Phase 2
+AUTH_USER_MODEL = 'users.User'   
+
 
 # DRF + JWT
 REST_FRAMEWORK = {
