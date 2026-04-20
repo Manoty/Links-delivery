@@ -1,3 +1,7 @@
 from django.contrib import admin
+from .models import Payment
 
-# Register your models here.
+@admin.register(Payment)
+class PaymentAdmin(admin.ModelAdmin):
+    list_display = ['order', 'phone_number', 'amount', 'status', 'mpesa_receipt_number']
+    list_filter  = ['status']
