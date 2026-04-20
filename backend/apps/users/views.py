@@ -1,3 +1,4 @@
+from .token_utils import get_tokens_for_user
 from rest_framework import generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -25,16 +26,11 @@ class RegisterView(generics.CreateAPIView):
         user = serializer.save()
 
         # Generate tokens for the new user
-        refresh = RefreshToken.for_user(user)
-
+        tokens = get_tokens_for_user(user)
         return Response({
-            'user':    UserSerializer(user).data,
-            'tokens': {
-                'refresh': str(refresh),
-                'access':  str(refresh.access_token),
-            }
+            'user':   UserSerializer(user).data,
+            'tokens': tokens,
         }, status=status.HTTP_201_CREATED)
-
 
 class LoginView(APIView):
     """
@@ -67,16 +63,11 @@ class LoginView(APIView):
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
-        refresh = RefreshToken.for_user(user)
-
+        tokens = get_tokens_for_user(user)
         return Response({
             'user':   UserSerializer(user).data,
-            'tokens': {
-                'refresh': str(refresh),
-                'access':  str(refresh.access_token),
-            }
+            'tokens': tokens,
         })
-
 
 class LogoutView(APIView):
     """
