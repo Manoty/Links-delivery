@@ -131,3 +131,8 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_SSL_REDIRECT = False
 SESSION_COOKIE_SECURE = False
 CSRF_COOKIE_SECURE = False
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.ngrok.io',
+    'https://*.ngrok-free.app',
+]

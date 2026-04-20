@@ -9,6 +9,8 @@ from .serializers import InitiatePaymentSerializer, PaymentSerializer
 from .mpesa import MpesaService
 from apps.orders.models import Order
 from apps.users.permissions import IsCustomer
+from django.views.decorators.csrf import csrf_exempt
+from django.utils.decorators import method_decorator
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +86,7 @@ class InitiatePaymentView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE
             )
 
-
+@method_decorator(csrf_exempt, name='dispatch')
 class MpesaCallbackView(APIView):
     """
     Safaricom calls this URL after the customer enters their PIN.
