@@ -3,54 +3,27 @@ from django.conf import settings
 
 
 class RiderProfile(models.Model):
-    # ... existing code unchanged ...
-    pass
-
-
-class DispatchLog(models.Model):
-    """
-    Append-only log of every dispatch event.
-    Answers questions like:
-    - How many orders did we auto-dispatch today?
-    - What was the average rider distance?
-    - Which orders needed manual override?
-
-    Why store distance_km?
-    Raw coordinates change as rider moves. Logging distance
-    at dispatch time captures the actual assignment context.
-    """
-
-    class Method(models.TextChoices):
-        AUTO   = 'auto',   'Automatic'
-        MANUAL = 'manual', 'Manual'
-
-    order      = models.ForeignKey(
-        'orders.Order',
-        on_delete=models.CASCADE,
-        related_name='dispatch_logs',
-    )
-    rider      = models.ForeignKey(
+    user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='dispatch_logs',
+        related_name='rider_profile'
     )
-    distance_km = models.DecimalField(
-        max_digits=6, decimal_places=4,
-        null=True, blank=True,
-        help_text="Haversine distance from rider to pickup at time of dispatch"
-    )
-    method      = models.CharField(
-        max_length=10,
-        choices=Method.choices,
-        default=Method.AUTO,
-    )
-    dispatched_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        ordering = ['-dispatched_at']
+    vehicle_type = models.CharField(max_length=50, default="motorcycle")
+
+    is_available = models.BooleanField(default=True)
+
+    current_lat = models.DecimalField(
+        max_digits=9, decimal_places=6,
+        null=True, blank=True
+    )
+
+    current_lng = models.DecimalField(
+        max_digits=9, decimal_places=6,
+        null=True, blank=True
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return (
-            f"Order #{self.order.id} → {self.rider.username} "
-            f"({self.method}) {self.distance_km}km"
-        )
+        return self.user.username

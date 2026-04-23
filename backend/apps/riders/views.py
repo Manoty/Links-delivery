@@ -1,146 +1,116 @@
 import logging
-from rest_framework import status
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import generics
+from rest_framework import generics, status
 from django.shortcuts import get_object_or_404
 
-from .models import RiderProfile
+from apps.users.permissions import IsRider, IsAdmin, IsRiderOrAdmin
+from apps.tracking.services import haversine_distance
+
+from .models import RiderProfile, DispatchLog
 from .serializers import (
     RiderProfileSerializer,
     RiderProfileUpdateSerializer,
     LocationUpdateSerializer,
 )
+
+from .dispatch import DispatchService
 from apps.orders.models import Order
 from apps.orders.serializers import OrderSerializer
 from apps.tracking.models import LocationUpdate
-from apps.users.permissions import IsRider, IsRiderOrAdmin
 
 logger = logging.getLogger(__name__)
 
 
+# =========================================================
+# RIDER PROFILE
+# =========================================================
 class RiderProfileView(generics.RetrieveUpdateAPIView):
     """
-    GET  → rider views their own profile
-    PUT  → rider updates vehicle type or availability
+    GET  → rider views profile
+    PUT  → rider updates vehicle / availability
     """
     permission_classes = [IsRider]
 
     def get_serializer_class(self):
-        if self.request.method in ['PUT', 'PATCH']:
+        if self.request.method in ["PUT", "PATCH"]:
             return RiderProfileUpdateSerializer
         return RiderProfileSerializer
 
     def get_object(self):
-        return get_object_or_404(
-            RiderProfile,
-            user=self.request.user
-        )
+        return get_object_or_404(RiderProfile, user=self.request.user)
 
     def update(self, request, *args, **kwargs):
-        partial  = kwargs.pop('partial', False)
         instance = self.get_object()
         serializer = self.get_serializer(
-            instance, data=request.data, partial=partial
+            instance,
+            data=request.data,
+            partial=kwargs.pop("partial", False),
         )
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        # Return full profile after update
-        return Response(
-            RiderProfileSerializer(instance).data
-        )
+        return Response(RiderProfileSerializer(instance).data)
 
 
+# =========================================================
+# AVAILABLE ORDERS
+# =========================================================
 class AvailableOrdersView(generics.ListAPIView):
-    """
-    Rider sees all PAID orders that have no rider assigned yet.
-    These are orders ready to be picked up.
-
-    Why filter by PAID (not PENDING)?
-    A pending order hasn't been paid. Assigning a rider before
-    payment is confirmed wastes rider time if payment fails.
-    Only paid orders are ready for dispatch.
-    """
-    serializer_class   = OrderSerializer
     permission_classes = [IsRider]
+    serializer_class = OrderSerializer
 
     def get_queryset(self):
         return Order.objects.filter(
             status=Order.Status.PAID,
-            rider__isnull=True,        # Not yet assigned to anyone
-        ).prefetch_related('items').select_related('customer')
+            rider__isnull=True,
+        ).select_related("customer").prefetch_related("items")
 
 
+# =========================================================
+# ACCEPT ORDER
+# =========================================================
 class AcceptOrderView(APIView):
-    """
-    Rider self-assigns to an available order.
-    POST /api/riders/orders/<order_id>/accept/
-
-    This is the self-serve version of admin assignment from Phase 4.
-    In Phase 10 (dispatch), the system will handle assignment automatically.
-    For now riders can claim orders from the available pool.
-
-    Race condition consideration:
-    Two riders could try to accept the same order simultaneously.
-    We handle this by re-checking status inside the same operation.
-    In production you'd use select_for_update() with a DB transaction.
-    """
     permission_classes = [IsRider]
 
     def post(self, request, order_id):
         order = get_object_or_404(Order, id=order_id)
 
-        # Re-check eligibility at the point of acceptance
         if order.status != Order.Status.PAID:
             return Response(
-                {'error': 'This order is no longer available.'},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Order not available."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        if order.rider is not None:
+        if order.rider:
             return Response(
-                {'error': 'This order has already been claimed by another rider.'},
-                status=status.HTTP_409_CONFLICT
+                {"error": "Already assigned."},
+                status=status.HTTP_409_CONFLICT,
             )
 
-        # Check rider profile exists
-        rider_profile = getattr(request.user, 'rider_profile', None)
+        rider_profile = getattr(request.user, "rider_profile", None)
         if not rider_profile:
             return Response(
-                {'error': 'Rider profile not found.'},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Rider profile missing."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Assign and update
-        order.rider  = request.user
+        order.rider = request.user
         order.status = Order.Status.ASSIGNED
         order.save()
 
         rider_profile.is_available = False
         rider_profile.save()
 
-        logger.info(
-            f"Rider {request.user.username} accepted Order #{order.id}"
-        )
+        logger.info(f"Rider {request.user.username} accepted order {order.id}")
 
-        return Response(
-            OrderSerializer(order).data,
-            status=status.HTTP_200_OK
-        )
+        return Response(OrderSerializer(order).data)
 
 
+# =========================================================
+# REJECT ORDER
+# =========================================================
 class RejectOrderView(APIView):
-    """
-    Rider explicitly rejects an assigned order.
-    POST /api/riders/orders/<order_id>/reject/
-
-    Why allow rejection?
-    Riders may be close to shift end, have vehicle issues,
-    or be outside the delivery area. Forcing acceptance
-    leads to abandoned deliveries — worse than rejection.
-
-    On rejection: order reverts to PAID so another rider can claim it.
-    """
     permission_classes = [IsRider]
 
     def post(self, request, order_id):
@@ -151,76 +121,53 @@ class RejectOrderView(APIView):
             status=Order.Status.ASSIGNED,
         )
 
-        # Unassign rider and revert order to paid pool
-        order.rider  = None
+        order.rider = None
         order.status = Order.Status.PAID
         order.save()
 
-        # Free up rider
-        rider_profile = getattr(request.user, 'rider_profile', None)
+        rider_profile = getattr(request.user, "rider_profile", None)
         if rider_profile:
             rider_profile.is_available = True
             rider_profile.save()
 
-        logger.info(
-            f"Rider {request.user.username} rejected Order #{order.id} "
-            f"— returned to available pool"
+        return Response(
+            {"message": f"Order {order.id} returned to pool."}
         )
 
-        return Response({
-            'message': f'Order #{order.id} rejected. It is now available for other riders.'
-        })
 
-
+# =========================================================
+# LOCATION UPDATE
+# =========================================================
 class LocationUpdateView(APIView):
-    """
-    Rider pushes their current GPS position.
-    POST /api/riders/location/update/
-
-    Called every 5 seconds by the rider app.
-    Does two writes in one request:
-      1. Updates RiderProfile (current position for dispatch)
-      2. Creates LocationUpdate record (history for tracking)
-
-    Why both?
-    RiderProfile.current_lat/lng = fast lookup for "where is this rider now"
-    LocationUpdate = append-only log for "where has this rider been"
-    Each serves a different query pattern.
-    """
     permission_classes = [IsRider]
 
     def post(self, request):
         serializer = LocationUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        lat      = serializer.validated_data['latitude']
-        lng      = serializer.validated_data['longitude']
-        order_id = serializer.validated_data.get('order_id')
+        lat = serializer.validated_data["latitude"]
+        lng = serializer.validated_data["longitude"]
+        order_id = serializer.validated_data.get("order_id")
 
-        # 1. Update rider's current position on their profile
-        rider_profile = getattr(request.user, 'rider_profile', None)
+        rider_profile = getattr(request.user, "rider_profile", None)
         if not rider_profile:
             return Response(
-                {'error': 'Rider profile not found.'},
-                status=status.HTTP_400_BAD_REQUEST
+                {"error": "Rider profile missing."},
+                status=status.HTTP_400_BAD_REQUEST,
             )
 
+        # update current position
         rider_profile.current_lat = lat
         rider_profile.current_lng = lng
         rider_profile.save()
 
-        # 2. Resolve the order if provided
         order = None
         if order_id:
             try:
-                order = Order.objects.get(
-                    id=order_id,
-                    rider=request.user,
-                )
+                order = Order.objects.get(id=order_id, rider=request.user)
             except Order.DoesNotExist:
-                pass   # Don't fail the location update over this
+                pass
 
-        # 3. Append to location history
         LocationUpdate.objects.create(
             rider=request.user,
             order=order,
@@ -228,39 +175,104 @@ class LocationUpdateView(APIView):
             longitude=lng,
         )
 
-        return Response({
-            'message':   'Location updated.',
-            'latitude':  str(lat),
-            'longitude': str(lng),
-        }, status=status.HTTP_200_OK)
+        return Response(
+            {"message": "Location updated."}
+        )
 
 
-class ActiveRidersView(APIView):
+# =========================================================
+# AUTO DISPATCH (CORE LOGIC)
+# =========================================================
+class AutoDispatchView(APIView):
     """
-    Admin sees all currently available riders and their positions.
-    GET /api/riders/active/
-    Used in the admin dashboard for dispatch overview.
+    Admin triggers nearest rider assignment.
     """
-    permission_classes = [IsRiderOrAdmin]
+    permission_classes = [IsAdmin]
 
-    def get(self, request):
-        profiles = RiderProfile.objects.filter(
+    def post(self, request, order_id):
+        order = get_object_or_404(Order, id=order_id)
+
+        if order.status != Order.Status.PAID:
+            return Response(
+                {"error": "Order must be paid."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        service = DispatchService()
+        result = service.assign(order)
+
+        if result["success"]:
+            return Response(result)
+        return Response(result, status=status.HTTP_404_NOT_FOUND)
+
+
+# =========================================================
+# DISPATCH LOGS
+# =========================================================
+class DispatchLogListView(generics.ListAPIView):
+    permission_classes = [IsAdmin]
+
+    def get_queryset(self):
+        return DispatchLog.objects.select_related("order", "rider").all()
+
+    def list(self, request, *args, **kwargs):
+        logs = self.get_queryset()
+
+        return Response([
+            {
+                "id": log.id,
+                "order_id": log.order.id,
+                "rider": log.rider.username,
+                "phone": log.rider.phone_number,
+                "distance_km": str(log.distance_km),
+                "method": log.method,
+                "dispatched_at": log.dispatched_at,
+            }
+            for log in logs
+        ])
+
+
+# =========================================================
+# NEAREST RIDERS PREVIEW
+# =========================================================
+class NearestRidersView(APIView):
+    permission_classes = [IsAdmin]
+
+    def get(self, request, order_id):
+        order = get_object_or_404(Order, id=order_id)
+
+        if not order.pickup_lat or not order.pickup_lng:
+            return Response(
+                {"error": "Missing pickup coordinates."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        riders = RiderProfile.objects.filter(
             is_available=True,
             current_lat__isnull=False,
             current_lng__isnull=False,
-        ).select_related('user')
+        ).select_related("user")
 
-        data = [
-            {
-                'rider_id':     p.user.id,
-                'username':     p.user.username,
-                'phone':        p.user.phone_number,
-                'vehicle_type': p.vehicle_type,
-                'latitude':     str(p.current_lat),
-                'longitude':    str(p.current_lng),
-                'last_seen':    p.updated_at,
-            }
-            for p in profiles
-        ]
+        results = []
 
-        return Response(data)
+        for r in riders:
+            distance = haversine_distance(
+                float(r.current_lat),
+                float(r.current_lng),
+                float(order.pickup_lat),
+                float(order.pickup_lng),
+            )
+
+            results.append({
+                "rider": r.user.username,
+                "phone": r.user.phone_number,
+                "distance_km": round(distance, 2),
+                "available": r.is_available,
+            })
+
+        results.sort(key=lambda x: x["distance_km"])
+
+        return Response({
+            "order_id": order.id,
+            "riders": results,
+        })
