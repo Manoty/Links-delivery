@@ -231,7 +231,7 @@ export default function Home() {
                         <div style={{ fontSize: 13, fontWeight: 500 }}>{activeOrder.rider.username}</div>
                         <div style={{ fontSize: 11, color: 'var(--gray-400)' }}>{activeOrder.rider.phone_number}</div>
                       </div>
-                      
+                      <a
                         href={`tel:${activeOrder.rider.phone_number}`}
                         style={{
                           width: 34, height: 34, borderRadius: '50%',
