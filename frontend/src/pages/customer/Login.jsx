@@ -22,7 +22,7 @@ export default function Login() {
       const role = res.data.user.role;
       if (role === 'rider')  navigate('/rider');
       else if (role === 'admin') navigate('/admin');
-      else navigate('/orders');
+      else navigate('/home');
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed.');
     } finally {
