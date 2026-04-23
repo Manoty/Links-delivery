@@ -1,7 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { ToastProvider } from './components/shared/Toast';
+
 import Login          from './pages/customer/Login';
 import Register       from './pages/customer/Register';
+import Home           from './pages/customer/Home';
 import OrderList      from './pages/customer/OrderList';
 import PlaceOrder     from './pages/customer/PlaceOrder';
 import TrackOrder     from './pages/customer/TrackOrder';
@@ -18,11 +21,19 @@ function ProtectedRoute({ children, allowedRoles }) {
 }
 
 function AppRoutes() {
+  const { user } = useAuth();
+
   return (
     <Routes>
       <Route path="/login"    element={<Login />} />
       <Route path="/register" element={<Register />} />
 
+      {/* Customer */}
+      <Route path="/home" element={
+        <ProtectedRoute allowedRoles={['customer']}>
+          <Home />
+        </ProtectedRoute>
+      }/>
       <Route path="/orders" element={
         <ProtectedRoute allowedRoles={['customer']}>
           <OrderList />
@@ -38,18 +49,31 @@ function AppRoutes() {
           <TrackOrder />
         </ProtectedRoute>
       }/>
+
+      {/* Rider */}
       <Route path="/rider" element={
         <ProtectedRoute allowedRoles={['rider']}>
           <RiderDashboard />
         </ProtectedRoute>
       }/>
+
+      {/* Admin */}
       <Route path="/admin" element={
         <ProtectedRoute allowedRoles={['admin']}>
           <AdminDashboard />
         </ProtectedRoute>
       }/>
 
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      {/* Smart default redirect */}
+      <Route path="/" element={
+        user ? (
+          user.role === 'admin'  ? <Navigate to="/admin"  replace /> :
+          user.role === 'rider'  ? <Navigate to="/rider"  replace /> :
+                                   <Navigate to="/home"   replace />
+        ) : <Navigate to="/login" replace />
+      }/>
+
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }
@@ -57,9 +81,11 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <AppRoutes />
-      </BrowserRouter>
+      <ToastProvider>
+        <BrowserRouter>
+          <AppRoutes />
+        </BrowserRouter>
+      </ToastProvider>
     </AuthProvider>
   );
 }
