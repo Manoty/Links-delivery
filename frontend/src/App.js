@@ -4,6 +4,7 @@ import Login      from './pages/customer/Login';
 import Register   from './pages/customer/Register';
 import TrackOrder from './pages/customer/TrackOrder';
 import PlaceOrder from './pages/customer/PlaceOrder';
+import OrderList from './pages/customer/OrderList';
 
 // Placeholder pages — built fully in Phase 9
 const RiderDashboard = () => <div style={{padding:40}}><h2>🏍️ Rider Dashboard — Phase 9</h2></div>;
