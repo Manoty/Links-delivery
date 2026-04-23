@@ -9,3 +9,4 @@ urlpatterns = [
     path('api/tracking/', include('apps.tracking.urls')),
     path('api/riders/', include('apps.riders.urls')),
 ]
+
