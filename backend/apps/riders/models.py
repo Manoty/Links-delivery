@@ -3,41 +3,54 @@ from django.conf import settings
 
 
 class RiderProfile(models.Model):
+    # ... existing code unchanged ...
+    pass
+
+
+class DispatchLog(models.Model):
     """
-    OneToOne with User (role=rider).
-    Stores rider-specific info separate from auth data.
+    Append-only log of every dispatch event.
+    Answers questions like:
+    - How many orders did we auto-dispatch today?
+    - What was the average rider distance?
+    - Which orders needed manual override?
 
-    Why OneToOne and not fields directly on User?
-    - Not every user is a rider. Keeping this separate means
-      the users table stays lean.
-    - Clean separation of concerns: auth data vs operational data.
+    Why store distance_km?
+    Raw coordinates change as rider moves. Logging distance
+    at dispatch time captures the actual assignment context.
     """
 
-    class VehicleType(models.TextChoices):
-        BICYCLE    = 'bicycle',    'Bicycle'
-        MOTORCYCLE = 'motorcycle', 'Motorcycle'
-        CAR        = 'car',        'Car'
+    class Method(models.TextChoices):
+        AUTO   = 'auto',   'Automatic'
+        MANUAL = 'manual', 'Manual'
 
-    user = models.OneToOneField(
+    order      = models.ForeignKey(
+        'orders.Order',
+        on_delete=models.CASCADE,
+        related_name='dispatch_logs',
+    )
+    rider      = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
-        related_name='rider_profile',
+        related_name='dispatch_logs',
     )
-    vehicle_type = models.CharField(
-        max_length=15,
-        choices=VehicleType.choices,
-        default=VehicleType.MOTORCYCLE,
+    distance_km = models.DecimalField(
+        max_digits=6, decimal_places=4,
+        null=True, blank=True,
+        help_text="Haversine distance from rider to pickup at time of dispatch"
     )
-    is_available = models.BooleanField(default=False)
+    method      = models.CharField(
+        max_length=10,
+        choices=Method.choices,
+        default=Method.AUTO,
+    )
+    dispatched_at = models.DateTimeField(auto_now_add=True)
 
-    # Current position — updated by rider app periodically
-    current_lat  = models.DecimalField(
-        max_digits=9, decimal_places=6, null=True, blank=True
-    )
-    current_lng  = models.DecimalField(
-        max_digits=9, decimal_places=6, null=True, blank=True
-    )
-    updated_at = models.DateTimeField(auto_now=True)
+    class Meta:
+        ordering = ['-dispatched_at']
 
     def __str__(self):
-        return f"Rider: {self.user.username} | {self.vehicle_type} | {'Available' if self.is_available else 'Offline'}"
+        return (
+            f"Order #{self.order.id} → {self.rider.username} "
+            f"({self.method}) {self.distance_km}km"
+        )
