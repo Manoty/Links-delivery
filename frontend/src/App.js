@@ -1,15 +1,12 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import Login      from './pages/customer/Login';
-import Register   from './pages/customer/Register';
-import TrackOrder from './pages/customer/TrackOrder';
-import PlaceOrder from './pages/customer/PlaceOrder';
-import OrderList from './pages/customer/OrderList';
-
-// Placeholder pages — built fully in Phase 9
-const RiderDashboard = () => <div style={{padding:40}}><h2>🏍️ Rider Dashboard — Phase 9</h2></div>;
-const AdminDashboard = () => <div style={{padding:40}}><h2>⚙️ Admin Dashboard — Phase 9</h2></div>;
-const OrderList      = () => <div style={{padding:40}}><h2>📋 My Orders — Phase 9</h2></div>;
+import Login          from './pages/customer/Login';
+import Register       from './pages/customer/Register';
+import OrderList      from './pages/customer/OrderList';
+import PlaceOrder     from './pages/customer/PlaceOrder';
+import TrackOrder     from './pages/customer/TrackOrder';
+import RiderDashboard from './pages/rider/RiderDashboard';
+import AdminDashboard from './pages/admin/AdminDashboard';
 
 function ProtectedRoute({ children, allowedRoles }) {
   const { user } = useAuth();
@@ -26,15 +23,9 @@ function AppRoutes() {
       <Route path="/login"    element={<Login />} />
       <Route path="/register" element={<Register />} />
 
-      {/* Customer routes */}
       <Route path="/orders" element={
         <ProtectedRoute allowedRoles={['customer']}>
           <OrderList />
-        </ProtectedRoute>
-      }/>
-      <Route path="/orders/:orderId/track" element={
-        <ProtectedRoute allowedRoles={['customer']}>
-          <TrackOrder />
         </ProtectedRoute>
       }/>
       <Route path="/place-order" element={
@@ -42,15 +33,16 @@ function AppRoutes() {
           <PlaceOrder />
         </ProtectedRoute>
       }/>
-
-      {/* Rider routes */}
+      <Route path="/orders/:orderId/track" element={
+        <ProtectedRoute allowedRoles={['customer']}>
+          <TrackOrder />
+        </ProtectedRoute>
+      }/>
       <Route path="/rider" element={
         <ProtectedRoute allowedRoles={['rider']}>
           <RiderDashboard />
         </ProtectedRoute>
       }/>
-
-      {/* Admin routes */}
       <Route path="/admin" element={
         <ProtectedRoute allowedRoles={['admin']}>
           <AdminDashboard />
