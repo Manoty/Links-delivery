@@ -1,83 +1,87 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { placeOrder } from '../../api/orders';
 import api from '../../api/axios';
-
-const MENU_ITEMS = [
-  { name: 'Chicken Burger',   price: 650 },
-  { name: 'Beef Burger',      price: 700 },
-  { name: 'Fries (Large)',    price: 250 },
-  { name: 'Soda 500ml',       price: 150 },
-  { name: 'Chicken Wings x6', price: 850 },
-  { name: 'Milkshake',        price: 350 },
-];
+import { useToast } from '../../components/shared/Toast';
+import '../../styles/app.css';
 
 export default function PlaceOrder() {
-  const [quantities, setQuantities] = useState(
-    Object.fromEntries(MENU_ITEMS.map((_, i) => [i, 0]))
-  );
-  const [delivery, setDelivery] = useState({
-    address: '', lat: '', lng: '', notes: '',
-  });
-  const [phone,   setPhone]   = useState('');
+  const navigate  = useNavigate();
+  const location  = useLocation();
+  const toast     = useToast();
+
+  const passedCart  = location.state?.cart || {};
+  const passedTotal = location.state?.cartTotal || 0;
+
+  const MENU = [
+    { id: 1, name: 'Chicken Burger',   price: 650, emoji: '🍔' },
+    { id: 2, name: 'Beef Burger',      price: 700, emoji: '🍔' },
+    { id: 3, name: 'Chicken Wings x6', price: 850, emoji: '🍗' },
+    { id: 4, name: 'Streetwise Two',   price: 750, emoji: '🍗' },
+    { id: 5, name: 'Fries Large',      price: 250, emoji: '🍟' },
+    { id: 6, name: 'Pepsi 500ml',      price: 150, emoji: '🥤' },
+    { id: 7, name: 'Milkshake',        price: 350, emoji: '🥛' },
+    { id: 8, name: 'Onion Rings',      price: 200, emoji: '🧅' },
+  ];
+
+  const [cart,    setCart]    = useState(passedCart);
+  const [step,    setStep]    = useState(passedTotal > 0 ? 2 : 1);
   const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState('');
-  const navigate = useNavigate();
+  const [form,    setForm]    = useState({
+    delivery_address: '',
+    delivery_lat:     '',
+    delivery_lng:     '',
+    delivery_notes:   '',
+    phone_number:     '',
+  });
 
-  const updateQty = (i, delta) =>
-    setQuantities(q => ({ ...q, [i]: Math.max(0, (q[i] || 0) + delta) }));
+  const updateCart = (id, delta) => {
+    setCart(c => {
+      const next = { ...c, [id]: Math.max(0, (c[id] || 0) + delta) };
+      if (next[id] === 0) delete next[id];
+      return next;
+    });
+  };
 
-  const selectedItems = MENU_ITEMS
-    .map((item, i) => ({ ...item, quantity: quantities[i] }))
-    .filter(item => item.quantity > 0);
+  const cartItems = MENU.filter(i => cart[i.id] > 0);
+  const total     = cartItems.reduce((s, i) => s + cart[i.id] * i.price, 0);
+  const cartCount = cartItems.reduce((s, i) => s + cart[i.id], 0);
 
-  const total = selectedItems.reduce(
-    (sum, item) => sum + item.price * item.quantity, 0
-  );
+  const handleSubmit = async () => {
+    if (!form.delivery_address) return toast.error('Enter your delivery address.');
+    if (!form.phone_number)     return toast.error('Enter your M-Pesa number.');
+    if (cartCount === 0)        return toast.error('Your cart is empty.');
 
-  const handleSubmit = async e => {
-    e.preventDefault();
-    if (selectedItems.length === 0) {
-      setError('Add at least one item.');
-      return;
-    }
     setLoading(true);
-    setError('');
-
     try {
-      // 1. Place the order
       const orderRes = await placeOrder({
-        delivery_address: delivery.address,
-        delivery_lat:     delivery.lat   || null,
-        delivery_lng:     delivery.lng   || null,
-        delivery_notes:   delivery.notes,
+        delivery_address: form.delivery_address,
+        delivery_lat:     form.delivery_lat || null,
+        delivery_lng:     form.delivery_lng || null,
+        delivery_notes:   form.delivery_notes,
         pickup_address:   'Scott Kitchen, Westlands',
         pickup_lat:       '-1.2673',
         pickup_lng:       '36.8084',
         total_amount:     total.toFixed(2),
-        items: selectedItems.map(i => ({
-          name: i.name, quantity: i.quantity, price: i.price,
+        items: cartItems.map(i => ({
+          name: i.name, quantity: cart[i.id], price: i.price,
         })),
       });
 
       const orderId = orderRes.data.id;
 
-      // 2. Immediately trigger M-Pesa STK push
       await api.post('/payments/pay/', {
         order_id:     orderId,
-        phone_number: phone,
+        phone_number: form.phone_number,
       });
 
-      navigate(`/orders/${orderId}/track`, {
-        state: { justOrdered: true }
-      });
-
+      toast.success('Order placed! Check your phone for M-Pesa prompt.');
+      navigate(`/orders/${orderId}/track`);
     } catch (err) {
-      const data = err.response?.data;
-      setError(
-        typeof data === 'object'
-          ? Object.values(data).flat().join(' ')
-          : 'Order failed. Please try again.'
+      const d = err.response?.data;
+      toast.error(
+        typeof d === 'string' ? d :
+        Object.values(d || {}).flat().join(' ') || 'Order failed.'
       );
     } finally {
       setLoading(false);
@@ -85,141 +89,261 @@ export default function PlaceOrder() {
   };
 
   return (
-    <div style={styles.container}>
-      <div style={styles.header}>
-        <h2 style={styles.title}>🍔 Place Order</h2>
-        <span style={styles.total}>KES {total.toLocaleString()}</span>
-      </div>
+    <div className="app-shell">
+      <div className="screen-content">
 
-      {error && <div style={styles.error}>{error}</div>}
-
-      {/* Menu */}
-      <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>Select Items</h3>
-        {MENU_ITEMS.map((item, i) => (
-          <div key={i} style={styles.menuItem}>
-            <div>
-              <div style={styles.itemName}>{item.name}</div>
-              <div style={styles.itemPrice}>KES {item.price}</div>
+        {/* Header */}
+        <div style={{
+          background: '#fff',
+          borderBottom: '0.5px solid var(--gray-200)',
+          padding: '14px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+        }}>
+          <button
+            onClick={() => step > 1 ? setStep(s => s - 1) : navigate(-1)}
+            style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: 'var(--gray-900)' }}
+          >
+            ←
+          </button>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 16, fontWeight: 600 }}>
+              {step === 1 ? 'Choose items' : step === 2 ? 'Delivery details' : 'Payment'}
             </div>
-            <div style={styles.qtyControls}>
-              <button style={styles.qtyBtn} onClick={() => updateQty(i, -1)}>−</button>
-              <span style={styles.qty}>{quantities[i]}</span>
-              <button style={styles.qtyBtn} onClick={() => updateQty(i, +1)}>+</button>
+            <div style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 1 }}>
+              Step {step} of 3
             </div>
           </div>
-        ))}
-      </div>
-
-      {/* Delivery details */}
-      <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>Delivery Details</h3>
-        <label style={styles.label}>Delivery Address *</label>
-        <input
-          style={styles.input}
-          placeholder="e.g. Westlands, Nairobi"
-          value={delivery.address}
-          onChange={e => setDelivery({ ...delivery, address: e.target.value })}
-          required
-        />
-        <div style={styles.row}>
-          <div style={styles.half}>
-            <label style={styles.label}>Latitude (optional)</label>
-            <input
-              style={styles.input}
-              placeholder="-1.2864"
-              value={delivery.lat}
-              onChange={e => setDelivery({ ...delivery, lat: e.target.value })}
-            />
-          </div>
-          <div style={styles.half}>
-            <label style={styles.label}>Longitude (optional)</label>
-            <input
-              style={styles.input}
-              placeholder="36.8172"
-              value={delivery.lng}
-              onChange={e => setDelivery({ ...delivery, lng: e.target.value })}
-            />
-          </div>
+          {step === 1 && cartCount > 0 && (
+            <div style={{
+              background: 'var(--green-50)',
+              color: 'var(--green-600)',
+              fontSize: 12,
+              fontWeight: 500,
+              padding: '4px 10px',
+              borderRadius: 'var(--radius-full)',
+            }}>
+              {cartCount} items
+            </div>
+          )}
         </div>
-        <label style={styles.label}>Delivery Notes</label>
-        <textarea
-          style={{ ...styles.input, height: 72, resize: 'vertical' }}
-          placeholder="Gate code, landmark, floor number..."
-          value={delivery.notes}
-          onChange={e => setDelivery({ ...delivery, notes: e.target.value })}
-        />
-      </div>
 
-      {/* Payment */}
-      <div style={styles.section}>
-        <h3 style={styles.sectionTitle}>M-Pesa Payment</h3>
-        <label style={styles.label}>M-Pesa Phone Number *</label>
-        <input
-          style={styles.input}
-          type="tel"
-          placeholder="0712345678"
-          value={phone}
-          onChange={e => setPhone(e.target.value)}
-          required
-        />
-        <div style={styles.mpesaNote}>
-          📱 You will receive an M-Pesa prompt after placing the order
-        </div>
-      </div>
-
-      {/* Order summary */}
-      {selectedItems.length > 0 && (
-        <div style={styles.summary}>
-          <h3 style={styles.sectionTitle}>Order Summary</h3>
-          {selectedItems.map((item, i) => (
-            <div key={i} style={styles.summaryRow}>
-              <span>{item.quantity}× {item.name}</span>
-              <span>KES {(item.price * item.quantity).toLocaleString()}</span>
-            </div>
+        {/* Step indicator */}
+        <div style={{ display: 'flex', padding: '10px 16px', gap: 6 }}>
+          {[1, 2, 3].map(s => (
+            <div
+              key={s}
+              style={{
+                flex: 1, height: 4, borderRadius: 2,
+                background: s <= step ? 'var(--green-700)' : 'var(--gray-200)',
+                transition: 'background 0.3s',
+              }}
+            />
           ))}
-          <div style={styles.summaryTotal}>
-            <span>Total</span>
-            <span>KES {total.toLocaleString()}</span>
-          </div>
         </div>
-      )}
 
-      <button
-        style={{
-          ...styles.submitBtn,
-          opacity: loading ? 0.7 : 1,
-        }}
-        onClick={handleSubmit}
-        disabled={loading}
-      >
-        {loading ? 'Placing order...' : `Place Order — KES ${total.toLocaleString()}`}
-      </button>
+        {/* Step 1 — Items */}
+        {step === 1 && (
+          <div style={{ padding: '8px 0' }}>
+            {MENU.map(item => {
+              const qty = cart[item.id] || 0;
+              return (
+                <div
+                  key={item.id}
+                  style={{
+                    margin: '0 16px 8px',
+                    background: '#fff',
+                    border: qty > 0 ? '1.5px solid var(--green-700)' : '0.5px solid var(--gray-200)',
+                    borderRadius: 'var(--radius-lg)',
+                    padding: '12px 14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    transition: 'border-color 0.15s',
+                  }}
+                >
+                  <div style={{ fontSize: 28, width: 44, textAlign: 'center' }}>{item.emoji}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 14, fontWeight: 500 }}>{item.name}</div>
+                    <div style={{ fontSize: 13, color: 'var(--green-700)', fontWeight: 600, marginTop: 2 }}>
+                      KES {item.price}
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {qty > 0 && (
+                      <button
+                        onClick={() => updateCart(item.id, -1)}
+                        style={{ width: 28, height: 28, borderRadius: 8, border: '0.5px solid var(--gray-200)', background: '#fff', fontSize: 16, cursor: 'pointer' }}
+                      >
+                        −
+                      </button>
+                    )}
+                    {qty > 0 && (
+                      <span style={{ fontSize: 14, fontWeight: 600, minWidth: 16, textAlign: 'center' }}>
+                        {qty}
+                      </span>
+                    )}
+                    <button
+                      onClick={() => updateCart(item.id, 1)}
+                      style={{
+                        width: 28, height: 28, borderRadius: 8,
+                        background: 'var(--green-700)', border: 'none',
+                        color: '#fff', fontSize: 18, cursor: 'pointer',
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Step 2 — Delivery */}
+        {step === 2 && (
+          <div style={{ padding: '16px' }}>
+            {/* Cart summary */}
+            <div style={{ background: 'var(--green-50)', borderRadius: 'var(--radius-lg)', padding: '12px 14px', marginBottom: 20 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--green-600)', marginBottom: 8 }}>
+                Your order
+              </div>
+              {cartItems.map(item => (
+                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--green-600)', marginBottom: 4 }}>
+                  <span>{item.emoji} {cart[item.id]}× {item.name}</span>
+                  <span>KES {(cart[item.id] * item.price).toLocaleString()}</span>
+                </div>
+              ))}
+              <div style={{ borderTop: '0.5px solid var(--green-100)', marginTop: 8, paddingTop: 8, display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 600, color: 'var(--green-700)' }}>
+                <span>Total</span>
+                <span>KES {total.toLocaleString()}</span>
+              </div>
+            </div>
+
+            <div className="input-group">
+              <label className="input-label">Delivery address *</label>
+              <input
+                className="input-field"
+                placeholder="e.g. Westlands, Nairobi"
+                value={form.delivery_address}
+                onChange={e => setForm(f => ({ ...f, delivery_address: e.target.value }))}
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 14 }}>
+              <div>
+                <label className="input-label">Latitude (opt.)</label>
+                <input className="input-field" placeholder="-1.2864"
+                  value={form.delivery_lat}
+                  onChange={e => setForm(f => ({ ...f, delivery_lat: e.target.value }))} />
+              </div>
+              <div>
+                <label className="input-label">Longitude (opt.)</label>
+                <input className="input-field" placeholder="36.8172"
+                  value={form.delivery_lng}
+                  onChange={e => setForm(f => ({ ...f, delivery_lng: e.target.value }))} />
+              </div>
+            </div>
+
+            <div className="input-group">
+              <label className="input-label">Delivery notes</label>
+              <textarea
+                className="input-field"
+                style={{ height: 80, resize: 'none' }}
+                placeholder="Gate code, landmark, floor number..."
+                value={form.delivery_notes}
+                onChange={e => setForm(f => ({ ...f, delivery_notes: e.target.value }))}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Step 3 — Payment */}
+        {step === 3 && (
+          <div style={{ padding: '16px' }}>
+            <div style={{
+              background: '#fff',
+              border: '0.5px solid var(--gray-200)',
+              borderRadius: 'var(--radius-xl)',
+              padding: '20px 16px',
+              marginBottom: 20,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                <div style={{ fontSize: 28 }}>📱</div>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 600 }}>M-Pesa payment</div>
+                  <div style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 1 }}>
+                    You'll receive a PIN prompt on your phone
+                  </div>
+                </div>
+              </div>
+
+              <div className="input-group">
+                <label className="input-label">M-Pesa phone number *</label>
+                <input
+                  className="input-field"
+                  type="tel"
+                  placeholder="0712 345 678"
+                  value={form.phone_number}
+                  onChange={e => setForm(f => ({ ...f, phone_number: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            {/* Final summary */}
+            <div style={{ background: 'var(--gray-50)', borderRadius: 'var(--radius-lg)', padding: '14px 16px', marginBottom: 20 }}>
+              <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 10 }}>Order summary</div>
+              {cartItems.map(item => (
+                <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--gray-600)', marginBottom: 6 }}>
+                  <span>{cart[item.id]}× {item.name}</span>
+                  <span>KES {(cart[item.id] * item.price).toLocaleString()}</span>
+                </div>
+              ))}
+              <div style={{ borderTop: '0.5px solid var(--gray-200)', marginTop: 10, paddingTop: 10 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--gray-500)', marginBottom: 4 }}>
+                  <span>Delivery fee</span><span>KES 0</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 700 }}>
+                  <span>Total</span>
+                  <span style={{ color: 'var(--green-700)' }}>KES {total.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ background: 'var(--amber-50)', borderRadius: 'var(--radius-md)', padding: '10px 14px', marginBottom: 20, fontSize: 12, color: 'var(--amber-800)' }}>
+              ⚡ Once you tap "Place order", an M-Pesa STK push will be sent to your phone. Enter your PIN to complete payment.
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Footer CTA */}
+      <div style={{ padding: '12px 16px', background: '#fff', borderTop: '0.5px solid var(--gray-200)' }}>
+        {step < 3 ? (
+          <button
+            className="btn-primary"
+            disabled={step === 1 && cartCount === 0}
+            onClick={() => {
+              if (step === 1 && cartCount === 0) return;
+              setStep(s => s + 1);
+            }}
+          >
+            {step === 1
+              ? cartCount > 0 ? `Continue — KES ${total.toLocaleString()}` : 'Add items to continue'
+              : 'Continue to payment'
+            }
+          </button>
+        ) : (
+          <button
+            className="btn-primary"
+            disabled={loading}
+            onClick={handleSubmit}
+          >
+            {loading ? 'Placing order...' : `Place order — KES ${total.toLocaleString()}`}
+          </button>
+        )}
+      </div>
     </div>
   );
 }
-
-const styles = {
-  container:    { maxWidth:640, margin:'0 auto', padding:'24px 16px', fontFamily:'sans-serif', paddingBottom:100 },
-  header:       { display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 },
-  title:        { fontSize:22, fontWeight:700, margin:0 },
-  total:        { fontSize:20, fontWeight:700, color:'#16a34a' },
-  error:        { background:'#fee2e2', color:'#dc2626', padding:12, borderRadius:8, marginBottom:16 },
-  section:      { background:'#fff', borderRadius:12, padding:20, marginBottom:16, boxShadow:'0 1px 4px rgba(0,0,0,0.06)' },
-  sectionTitle: { fontSize:16, fontWeight:600, margin:'0 0 16px', color:'#111827' },
-  menuItem:     { display:'flex', justifyContent:'space-between', alignItems:'center', padding:'12px 0', borderBottom:'1px solid #f3f4f6' },
-  itemName:     { fontWeight:500 },
-  itemPrice:    { fontSize:13, color:'#6b7280', marginTop:2 },
-  qtyControls:  { display:'flex', alignItems:'center', gap:12 },
-  qtyBtn:       { width:32, height:32, borderRadius:8, border:'1px solid #d1d5db', background:'#f9fafb', cursor:'pointer', fontSize:18, display:'flex', alignItems:'center', justifyContent:'center' },
-  qty:          { width:24, textAlign:'center', fontWeight:600 },
-  label:        { display:'block', fontSize:14, fontWeight:500, color:'#374151', marginBottom:6 },
-  input:        { width:'100%', padding:'10px 12px', border:'1px solid #d1d5db', borderRadius:8, fontSize:15, marginBottom:12, boxSizing:'border-box' },
-  row:          { display:'flex', gap:12 },
-  half:         { flex:1 },
-  mpesaNote:    { background:'#f0fdf4', color:'#15803d', padding:10, borderRadius:8, fontSize:13 },
-  summary:      { background:'#fff', borderRadius:12, padding:20, marginBottom:16, boxShadow:'0 1px 4px rgba(0,0,0,0.06)' },
-  summaryRow:   { display:'flex', justifyContent:'space-between', padding:'6px 0', color:'#374151' },
-  summaryTotal: { display:'flex', justifyContent:'space-between', padding:'12px 0 0', fontWeight:700, fontSize:16, borderTop:'1px solid #e5e7eb', marginTop:8 },
-  submitBtn:    { width:'100%', padding:16, background:'#16a34a', color:'#fff', border:'none', borderRadius:12, fontSize:17, fontWeight:700, cursor:'pointer' },
-};
