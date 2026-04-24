@@ -1,68 +1,76 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, NavLink } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { getMyOrders } from '../../api/orders';
 import { useToast } from '../../components/shared/Toast';
-import { SkeletonMenu } from '../../components/shared/Skeleton';
+import NotificationBell from '../../components/shared/NotificationBell';
 import '../../styles/app.css';
 
-const MENU = [
-  { id: 1, name: 'Chicken Burger',   price: 650,  emoji: '🍔', category: 'Burgers'  },
-  { id: 2, name: 'Beef Burger',      price: 700,  emoji: '🍔', category: 'Burgers'  },
-  { id: 3, name: 'Chicken Wings x6', price: 850,  emoji: '🍗', category: 'Chicken'  },
-  { id: 4, name: 'Streetwise Two',   price: 750,  emoji: '🍗', category: 'Chicken'  },
-  { id: 5, name: 'Fries Large',      price: 250,  emoji: '🍟', category: 'Sides'    },
-  { id: 6, name: 'Pepsi 500ml',      price: 150,  emoji: '🥤', category: 'Drinks'   },
-  { id: 7, name: 'Milkshake',        price: 350,  emoji: '🥛', category: 'Drinks'   },
-  { id: 8, name: 'Onion Rings',      price: 200,  emoji: '🧅', category: 'Sides'    },
+const CATEGORIES = [
+  { id: 'all',     label: 'All',      emoji: '🍽️', bg: '#F7F7F7' },
+  { id: 'burgers', label: 'Burgers',  emoji: '🍔', bg: '#FFF3E0' },
+  { id: 'pizza',   label: 'Pizza',    emoji: '🍕', bg: '#FCE4EC' },
+  { id: 'chicken', label: 'Chicken',  emoji: '🍗', bg: '#E8F5E9' },
+  { id: 'sides',   label: 'Sides',    emoji: '🍟', bg: '#FFF9C4' },
+  { id: 'drinks',  label: 'Drinks',   emoji: '🥤', bg: '#E3F2FD' },
+  { id: 'desserts',label: 'Desserts', emoji: '🧁', bg: '#F3E5F5' },
 ];
 
-const CATS = ['All', 'Burgers', 'Chicken', 'Sides', 'Drinks'];
+const RESTAURANTS = [
+  { id: 1, name: 'KFC Sarit Centre',  emoji: '🍗', bg: '#FFF3E0', rating: 4.9, time: '20–30', delivery: 'Free',    badge: '⭐ Top rated' },
+  { id: 2, name: 'Debonairs Pizza',   emoji: '🍕', bg: '#FCE4EC', rating: 4.7, time: '25–40', delivery: 'KES 50',  badge: '🔥 Popular'  },
+  { id: 3, name: 'Galitos Chicken',   emoji: '🍗', bg: '#E8F5E9', rating: 4.8, time: '15–25', delivery: 'Free',    badge: '🎁 20% off'  },
+  { id: 4, name: 'Burger Barn',       emoji: '🍔', bg: '#FFF3E0', rating: 4.6, time: '20–35', delivery: 'KES 30',  badge: '⚡ Fast'      },
+];
 
-const STATUS_META = {
-  pending:   { label: 'Awaiting payment', color: 'pill-amber' },
-  paid:      { label: 'Finding rider',    color: 'pill-blue'  },
-  assigned:  { label: 'Rider assigned',   color: 'pill-purple'},
-  picked_up: { label: 'On the way',       color: 'pill-green' },
-  delivered: { label: 'Delivered',        color: 'pill-green' },
-  cancelled: { label: 'Cancelled',        color: 'pill-red'   },
-};
+const MENU_ITEMS = [
+  { id: 1, name: 'Chicken Burger',   price: 650,  emoji: '🍔', bg: '#FFF3E0', category: 'burgers'  },
+  { id: 2, name: 'Beef Burger',      price: 700,  emoji: '🍔', bg: '#FCE4EC', category: 'burgers'  },
+  { id: 3, name: 'Chicken Wings',    price: 850,  emoji: '🍗', bg: '#E8F5E9', category: 'chicken'  },
+  { id: 4, name: 'Streetwise Two',   price: 750,  emoji: '🍗', bg: '#FFF3E0', category: 'chicken'  },
+  { id: 5, name: 'Fries Large',      price: 250,  emoji: '🍟', bg: '#FFF9C4', category: 'sides', oldPrice: 320 },
+  { id: 6, name: 'Pepsi 500ml',      price: 150,  emoji: '🥤', bg: '#E3F2FD', category: 'drinks'   },
+  { id: 7, name: 'Milkshake',        price: 350,  emoji: '🥛', bg: '#E3F2FD', category: 'drinks', oldPrice: 420 },
+  { id: 8, name: 'Onion Rings',      price: 200,  emoji: '🧅', bg: '#FFF9C4', category: 'sides'    },
+];
 
-const STEPS = ['placed', 'paid', 'rider', 'transit', 'done'];
-const ORDER_STEP = {
-  pending:   1,
-  paid:      2,
-  assigned:  3,
-  picked_up: 4,
-  delivered: 5,
+const OFFER_CHIPS = [
+  { id: 'fast',    label: 'Under 30 min', emoji: '⚡' },
+  { id: 'deals',   label: 'Deals',        emoji: '🎁' },
+  { id: 'top',     label: 'Top rated',    emoji: '⭐' },
+  { id: 'healthy', label: 'Healthy',      emoji: '🥗' },
+  { id: 'new',     label: 'New',          emoji: '✨' },
+];
+
+const STATUS_ETA = {
+  assigned:  'Finding rider',
+  picked_up: 'On the way',
+  paid:      'Finding rider',
 };
 
 export default function Home() {
-  const { user } = useAuth();
+  const { user }  = useAuth();
   const navigate  = useNavigate();
   const toast     = useToast();
 
-  const [cat,      setCat]      = useState('All');
-  const [cart,     setCart]     = useState({});
-  const [orders,   setOrders]   = useState([]);
-  const [loading,  setLoading]  = useState(true);
-  const [search,   setSearch]   = useState('');
+  const [cat,         setCat]         = useState('all');
+  const [activeChip,  setActiveChip]  = useState('fast');
+  const [cart,        setCart]        = useState({});
+  const [search,      setSearch]      = useState('');
+  const [activeOrder, setActiveOrder] = useState(null);
+  const [tracking,    setTracking]    = useState(null);
+  const searchRef = useRef(null);
 
   useEffect(() => {
     getMyOrders()
-      .then(r => setOrders(r.data))
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .then(r => {
+        const active = r.data.find(o =>
+          ['paid', 'assigned', 'picked_up'].includes(o.status)
+        );
+        setActiveOrder(active || null);
+      })
+      .catch(() => {});
   }, []);
-
-  const activeOrder = orders.find(o =>
-    ['assigned', 'picked_up', 'paid'].includes(o.status)
-  );
-
-  const filtered = MENU.filter(item =>
-    (cat === 'All' || item.category === cat) &&
-    (!search || item.name.toLowerCase().includes(search.toLowerCase()))
-  );
 
   const updateCart = (id, delta) => {
     setCart(c => {
@@ -72,8 +80,15 @@ export default function Home() {
     });
   };
 
-  const cartCount  = Object.values(cart).reduce((s, n) => s + n, 0);
-  const cartTotal  = MENU.reduce((s, item) => s + (cart[item.id] || 0) * item.price, 0);
+  const filtered = MENU_ITEMS.filter(item =>
+    (cat === 'all' || item.category === cat) &&
+    (!search || item.name.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const cartCount = Object.values(cart).reduce((s, n) => s + n, 0);
+  const cartTotal = MENU_ITEMS.reduce(
+    (s, item) => s + (cart[item.id] || 0) * item.price, 0
+  );
 
   const goToCart = () => {
     if (cartCount === 0) return toast.info('Add items to your cart first.');
@@ -82,317 +97,303 @@ export default function Home() {
 
   const greeting = () => {
     const h = new Date().getHours();
-    if (h < 12) return 'Good morning';
-    if (h < 17) return 'Good afternoon';
-    return 'Good evening';
+    return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
   };
 
+  const firstName = user?.username?.split('_')[0] || user?.username || 'there';
+
   return (
-    <div className="app-shell">
-      <div className="screen-content">
+    <div className="app-shell" style={{ background: '#fff' }}>
+      <div className="screen-content" style={{ background: '#fff' }}>
 
-        {/* Header */}
-        <div className="topbar-green">
-          <div>
-            <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
-              {greeting()}, {user?.username?.split('_')[0]}
+        {/* ── HERO ── */}
+        <div className="hero-black">
+          {/* Top row */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 18 }}>
+            {/* Location */}
+            <div className="loc-row" style={{ margin: 0 }}>
+              <div className="loc-pin-v2">
+                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                  <circle cx="5" cy="5" r="3" fill="#fff"/>
+                </svg>
+              </div>
+              <div>
+                <div className="loc-name">Westlands, Nairobi</div>
+                <div className="loc-sub-v2">Delivering now · 20–35 min</div>
+              </div>
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ marginLeft: 2 }}>
+                <path d="M3 5l4 4 4-4" stroke="rgba(255,255,255,0.5)" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
             </div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <span style={{ fontSize: 12 }}>📍</span> Nairobi, Kenya
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <button
-              style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, padding: '6px 10px', color: '#fff', fontSize: 12, cursor: 'pointer' }}
-              onClick={() => navigate('/orders')}
-            >
-              My orders
-            </button>
-            <div className="av av-sm av-white">
-              {user?.username?.slice(0, 2).toUpperCase()}
-            </div>
-          </div>
-        </div>
 
-        {/* Search */}
-        <div style={{ padding: '12px 16px 4px' }}>
-          <div style={{
-            background: '#fff',
-            border: '0.5px solid var(--gray-200)',
-            borderRadius: 'var(--radius-lg)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '10px 14px',
-          }}>
-            <span style={{ fontSize: 16 }}>🔍</span>
-            <input
-              style={{ border: 'none', outline: 'none', flex: 1, fontSize: 14, background: 'transparent', color: 'var(--gray-900)' }}
-              placeholder="Search for food..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-            />
-            {search && (
-              <span style={{ cursor: 'pointer', color: 'var(--gray-400)', fontSize: 14 }} onClick={() => setSearch('')}>✕</span>
-            )}
-          </div>
-        </div>
-
-        {/* Categories */}
-        <div style={{ display: 'flex', gap: 8, padding: '10px 16px', overflowX: 'auto', scrollbarWidth: 'none' }}>
-          {CATS.map(c => (
-            <button
-              key={c}
-              onClick={() => setCat(c)}
-              style={{
-                flexShrink: 0,
-                padding: '6px 14px',
-                borderRadius: 'var(--radius-full)',
-                border: 'none',
-                background: cat === c ? 'var(--green-700)' : '#fff',
-                color: cat === c ? '#fff' : 'var(--gray-600)',
-                fontSize: 13,
-                fontWeight: cat === c ? 500 : 400,
-                cursor: 'pointer',
-                border: cat === c ? 'none' : '0.5px solid var(--gray-200)',
-              }}
-            >
-              {c}
-            </button>
-          ))}
-        </div>
-
-        {/* Active order card */}
-        {activeOrder && (
-          <>
-            <div className="section-head">
-              <div className="section-title">Active order</div>
-              <span
-                className="section-link"
-                onClick={() => navigate(`/orders/${activeOrder.id}/track`)}
-              >
-                Track →
-              </span>
-            </div>
-            <div style={{ margin: '0 16px 16px' }}>
-              <div className="card">
-                {/* Map strip */}
-                <div style={{
-                  height: 80,
-                  background: 'linear-gradient(135deg, #E1F5EE 0%, #9FE1CB 100%)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  position: 'relative',
-                }}>
-                  <div style={{ position: 'absolute', left: '40%', fontSize: 20 }}>🏍️</div>
-                  <div style={{ position: 'absolute', right: '20%', fontSize: 16 }}>📍</div>
-                  <div style={{
-                    position: 'absolute', left: '42%', right: '22%',
-                    top: '50%', height: 2, background: 'var(--green-700)', opacity: 0.4,
-                  }} />
-                  <span
-                    style={{ position: 'absolute', top: 8, right: 12, fontSize: 11, background: '#fff', padding: '2px 8px', borderRadius: 20, color: 'var(--green-600)', fontWeight: 500 }}
-                    className="pill-green"
-                  >
-                    {STATUS_META[activeOrder.status]?.label}
-                  </span>
-                </div>
-
-                <div style={{ padding: '12px 14px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                    <div>
-                      <div style={{ fontSize: 26, fontWeight: 700, lineHeight: 1 }}>
-                        {activeOrder.status === 'picked_up' ? '~8' : '—'}
-                      </div>
-                      <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 2 }}>
-                        {activeOrder.status === 'picked_up' ? 'minutes away' : STATUS_META[activeOrder.status]?.label}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 11, color: 'var(--gray-400)' }}>Order #{activeOrder.id}</div>
-                      <div style={{ fontSize: 13, fontWeight: 500, marginTop: 2 }}>
-                        KES {parseFloat(activeOrder.total_amount).toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Rider info */}
-                  {activeOrder.rider && (
-                    <div style={{
-                      display: 'flex', alignItems: 'center', gap: 10,
-                      padding: '10px 0', borderTop: '0.5px solid var(--gray-200)',
-                      marginBottom: 10,
-                    }}>
-                      <div className="av av-sm av-green">
-                        {activeOrder.rider.username?.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: 13, fontWeight: 500 }}>{activeOrder.rider.username}</div>
-                        <div style={{ fontSize: 11, color: 'var(--gray-400)' }}>{activeOrder.rider.phone_number}</div>
-                      </div>
-                      <a
-                        href={`tel:${activeOrder.rider.phone_number}`}
-                        style={{
-                          width: 34, height: 34, borderRadius: '50%',
-                          background: 'var(--green-50)', display: 'flex',
-                          alignItems: 'center', justifyContent: 'center', fontSize: 16,
-                          textDecoration: 'none',
-                        }}
-                      >
-                        📞
-                      </a>
-                    </div>
-                  )}
-
-                  {/* Progress steps */}
-                  <div className="step-track">
-                    {['Placed', 'Paid', 'Rider', 'Transit', 'Done'].map((label, i) => {
-                      const currentStep = ORDER_STEP[activeOrder.status] || 1;
-                      const isDone   = i + 1 < currentStep;
-                      const isActive = i + 1 === currentStep;
-                      return (
-                        <div className="step-item" key={label}>
-                          {i < 4 && (
-                            <div className={`step-connector ${isDone ? 'done' : ''}`} />
-                          )}
-                          <div className={`step-circle ${isDone ? 'done' : isActive ? 'active' : ''}`} />
-                          <div className={`step-label ${isActive ? 'active' : ''}`}>{label}</div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+            {/* Notification bell */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <NotificationBell />
+              <div style={{
+                width: 36, height: 36,
+                background: 'rgba(255,255,255,0.1)',
+                borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 13, fontWeight: 700, color: '#fff',
+              }}>
+                {firstName.slice(0, 2).toUpperCase()}
               </div>
             </div>
-          </>
-        )}
-
-        {/* Menu */}
-        <div className="section-head">
-          <div className="section-title">
-            {search ? `Results for "${search}"` : `${cat === 'All' ? 'Popular items' : cat}`}
           </div>
-          <div style={{ fontSize: 12, color: 'var(--gray-400)' }}>{filtered.length} items</div>
+
+          {/* Headline */}
+          <div className="hero-headline">
+            {greeting()},<br />{firstName} 👋
+          </div>
+          <div className="hero-sub">What are you craving today?</div>
+
+          {/* Search — sits on white surface that bleeds into body */}
+          <div className="search-surface">
+            <div className="search-inner" onClick={() => searchRef.current?.focus()}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                <circle cx="7" cy="7" r="5" stroke="#999" strokeWidth="1.5"/>
+                <path d="M11 11l3 3" stroke="#999" strokeWidth="1.5" strokeLinecap="round"/>
+              </svg>
+              <input
+                ref={searchRef}
+                placeholder="Search food, restaurants..."
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
+              {search && (
+                <span
+                  style={{ cursor: 'pointer', color: '#999', fontSize: 13 }}
+                  onClick={() => setSearch('')}
+                >
+                  ✕
+                </span>
+              )}
+            </div>
+            {/* Filter button */}
+            <div style={{
+              width: 44, height: 44,
+              background: '#F3F3F3',
+              borderRadius: 10,
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              gap: 3, cursor: 'pointer', flexShrink: 0,
+            }}>
+              {[14, 10, 6].map(w => (
+                <div key={w} style={{ width: w, height: 2, background: '#333', borderRadius: 1 }} />
+              ))}
+            </div>
+          </div>
         </div>
 
-        {loading ? (
-          <SkeletonMenu />
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, padding: '0 16px 16px' }}>
+        {/* ── BODY ── */}
+        <div className="home-body">
+
+          {/* Categories */}
+          <div className="cat-scroll">
+            {CATEGORIES.map(c => (
+              <div key={c.id} className="cat-pill" onClick={() => setCat(c.id)}>
+                <div
+                  className={`cat-circle ${cat === c.id ? 'active' : ''}`}
+                  style={{ background: c.bg }}
+                >
+                  <span style={{ fontSize: 24 }}>{c.emoji}</span>
+                </div>
+                <div className="cat-label">{c.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Active order card — only when order is live */}
+          {activeOrder && (
+            <div
+              className="active-order-mini"
+              onClick={() => navigate(`/orders/${activeOrder.id}/track`)}
+            >
+              <div className="aom-icon">🏍️</div>
+              <div>
+                <div className="aom-title">Order #{activeOrder.id}</div>
+                <div className="aom-sub">
+                  {STATUS_ETA[activeOrder.status] || activeOrder.status}
+                  {activeOrder.rider && ` · ${activeOrder.rider.username}`}
+                </div>
+              </div>
+              <div className="aom-right">
+                {activeOrder.status === 'picked_up' ? (
+                  <>
+                    <div className="aom-eta">~8</div>
+                    <div className="aom-eta-label">min away</div>
+                  </>
+                ) : (
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <path d="M8 5l5 5-5 5" stroke="#06C167" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Promo banner */}
+          {!search && (
+            <div className="promo-banner">
+              <div className="promo-blob" />
+              <div style={{ position: 'relative', zIndex: 1 }}>
+                <div className="promo-tag">LIMITED TIME</div>
+                <div className="promo-title">
+                  Free delivery<br />this weekend
+                </div>
+                <div className="promo-desc">On orders above KES 800</div>
+              </div>
+              <div className="promo-emoji">🎉</div>
+            </div>
+          )}
+
+          {/* Offer chips */}
+          {!search && (
+            <div className="offer-strip">
+              {OFFER_CHIPS.map(chip => (
+                <div
+                  key={chip.id}
+                  className={`offer-chip ${activeChip === chip.id ? 'active' : ''}`}
+                  onClick={() => setActiveChip(chip.id)}
+                >
+                  <span style={{ fontSize: 14 }}>{chip.emoji}</span>
+                  {chip.label}
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Top restaurants */}
+          {!search && (
+            <>
+              <div className="sec-head">
+                <div className="sec-title">Top restaurants</div>
+                <div className="sec-link">See all</div>
+              </div>
+
+              <div className="resto-scroll">
+                {RESTAURANTS.map(r => (
+                  <div key={r.id} className="resto-card">
+                    <div className="resto-img" style={{ background: r.bg }}>
+                      <span style={{ fontSize: 44 }}>{r.emoji}</span>
+                      <div className="resto-badge">{r.badge}</div>
+                    </div>
+                    <div className="resto-name">{r.name}</div>
+                    <div className="resto-meta">
+                      <span className="resto-rating">{r.rating}</span>
+                      <span>·</span>
+                      <span>{r.time} min</span>
+                      <span>·</span>
+                      <span>{r.delivery}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Menu section */}
+          <div className="sec-head" style={{ marginTop: search ? 0 : 4 }}>
+            <div className="sec-title">
+              {search
+                ? `"${search}"`
+                : cat === 'all' ? 'Order again 🔁' : CATEGORIES.find(c => c.id === cat)?.label
+              }
+            </div>
+            <div style={{ fontSize: 13, color: '#999', fontWeight: 500 }}>
+              {filtered.length} items
+            </div>
+          </div>
+
+          <div className="menu-grid-2">
             {filtered.map(item => {
               const qty = cart[item.id] || 0;
               return (
-                <div
-                  key={item.id}
-                  className="card"
-                  style={{ padding: 12, cursor: 'pointer' }}
-                >
-                  <div style={{
-                    height: 70,
-                    background: 'var(--gray-100)',
-                    borderRadius: 8,
-                    marginBottom: 8,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 32,
-                  }}>
-                    {item.emoji}
+                <div key={item.id} className="menu-card-v2">
+                  <div className="menu-img-v2" style={{ background: item.bg }}>
+                    <span style={{ fontSize: 40 }}>{item.emoji}</span>
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 2 }}>{item.name}</div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--green-700)' }}>
-                      KES {item.price}
+                  <div className="menu-body-v2">
+                    <div className="menu-name-v2">{item.name}</div>
+                    <div style={{ display: 'flex', alignItems: 'baseline' }}>
+                      <div className="menu-price-v2">KES {item.price}</div>
+                      {item.oldPrice && (
+                        <div className="menu-old-price">{item.oldPrice}</div>
+                      )}
                     </div>
-                    {qty === 0 ? (
-                      <button
-                        onClick={() => updateCart(item.id, 1)}
-                        style={{
-                          width: 26, height: 26,
-                          borderRadius: 8,
-                          background: 'var(--green-700)',
-                          color: '#fff',
-                          border: 'none',
-                          fontSize: 18,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        +
-                      </button>
-                    ) : (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <button
-                          onClick={() => updateCart(item.id, -1)}
-                          style={{ width: 24, height: 24, borderRadius: 6, border: '0.5px solid var(--gray-200)', background: '#fff', cursor: 'pointer', fontSize: 16 }}
-                        >
-                          −
-                        </button>
-                        <span style={{ fontSize: 13, fontWeight: 600, minWidth: 14, textAlign: 'center' }}>{qty}</span>
-                        <button
-                          onClick={() => updateCart(item.id, 1)}
-                          style={{ width: 24, height: 24, borderRadius: 6, background: 'var(--green-700)', border: 'none', color: '#fff', cursor: 'pointer', fontSize: 16 }}
-                        >
-                          +
-                        </button>
-                      </div>
-                    )}
                   </div>
+
+                  {qty === 0 ? (
+                    <button
+                      className="add-fab"
+                      onClick={() => updateCart(item.id, 1)}
+                    >
+                      +
+                    </button>
+                  ) : (
+                    <div className="qty-ctrl-v2">
+                      <button className="qty-btn-v2" onClick={() => updateCart(item.id, -1)}>−</button>
+                      <div className="qty-num-v2">{qty}</div>
+                      <button className="qty-btn-v2" onClick={() => updateCart(item.id, 1)}>+</button>
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
-        )}
+
+          {filtered.length === 0 && (
+            <div style={{ textAlign: 'center', padding: '40px 0', color: '#999' }}>
+              <div style={{ fontSize: 40, marginBottom: 10 }}>🔍</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: '#333', marginBottom: 4 }}>
+                No results for "{search}"
+              </div>
+              <div style={{ fontSize: 13 }}>Try a different search term</div>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Cart bar */}
+      {/* ── CART FLOAT BAR ── */}
       {cartCount > 0 && (
-        <div
-          onClick={goToCart}
-          style={{
-            position: 'sticky',
-            bottom: 'var(--bottom-nav)',
-            margin: '0 16px 8px',
-            background: 'var(--green-700)',
-            borderRadius: 'var(--radius-lg)',
-            padding: '12px 16px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            cursor: 'pointer',
-            zIndex: 10,
-          }}
-        >
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: '#fff' }}>
-              {cartCount} item{cartCount > 1 ? 's' : ''} in cart
+        <div className="cart-float-v2" onClick={goToCart}>
+          <div className="cart-bar-v2">
+            <div className="cart-bubble-v2">{cartCount}</div>
+            <div className="cart-info-v2">
+              <div className="cart-main-v2">
+                View cart — KES {cartTotal.toLocaleString()}
+              </div>
+              <div className="cart-hint-v2">
+                Scott Kitchen · Tap to checkout
+              </div>
             </div>
-            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.75)', marginTop: 1 }}>
-              KES {cartTotal.toLocaleString()} · Tap to checkout
-            </div>
+            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <path d="M8 5l5 5-5 5" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"/>
+            </svg>
           </div>
-          <div style={{ color: '#fff', fontSize: 20 }}>›</div>
         </div>
       )}
 
-      {/* Bottom nav */}
-      <nav className="bottom-nav">
+      {/* ── BOTTOM NAV ── */}
+      <nav className="bottom-nav-v2">
         {[
-          { to: '/home',        icon: '🏠', label: 'Home'    },
-          { to: '/orders',      icon: '📋', label: 'Orders'  },
-          { to: '/orders/track',icon: '📍', label: 'Track'   },
-          { to: '/profile',     icon: '👤', label: 'Profile' },
+          { to: '/home',         icon: '🏠', label: 'Home'    },
+          { to: '/search',       icon: '🔍', label: 'Search'  },
+          { to: '/orders',       icon: '📋', label: 'Orders'  },
+          { to: '/profile',      icon: '👤', label: 'Account' },
         ].map(item => (
           <NavLink
             key={item.to}
             to={item.to}
-            className={({ isActive }) => `bn-item ${isActive ? 'active' : ''}`}
+            className={({ isActive }) => `bn-v2 ${isActive ? 'active' : ''}`}
           >
-            <div className="bn-icon">{item.icon}</div>
-            <div className="bn-label">{item.label}</div>
+            {({ isActive }) => (
+              <>
+                {isActive && <div className="bn-active-dot" />}
+                <div className="bn-icon-v2">{item.icon}</div>
+                <div className="bn-label-v2">{item.label}</div>
+              </>
+            )}
           </NavLink>
         ))}
       </nav>
