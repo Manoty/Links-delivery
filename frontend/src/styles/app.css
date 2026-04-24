@@ -1,11 +1,34 @@
-/* ── Uber-style tokens ── */
+/* ──  tokens ── */
 :root {
-  --black:      #000000;
-  --uber-green: #06C167;
-  --surface:    #F7F7F7;
-  --card-bg:    #FFFFFF;
-  --muted:      #727272;
-  --border-light: #F0F0F0;
+  /* Scott brand palette */
+  --scott-orange:   #E8521A;
+  --scott-orange-light: #FFF3EE;
+  --scott-dark:     #1A1207;
+  --scott-cream:    #FFF8F3;
+  --scott-warm:     #F0EBE3;
+  --scott-muted:    #B0A396;
+  --scott-text:     #6B5E52;
+
+  /* Semantic */
+  --green:          #1D9E75;
+  --green-light:    #E1F5EE;
+  --red:            #E24B4A;
+  --red-light:      #FCEBEB;
+  --amber:          #BA7517;
+  --amber-light:    #FAEEDA;
+  --blue:           #378ADD;
+  --blue-light:     #E6F1FB;
+
+  /* Layout */
+  --bottom-nav:     64px;
+  --radius-sm:      6px;
+  --radius-md:      10px;
+  --radius-lg:      14px;
+  --radius-xl:      18px;
+  --radius-full:    9999px;
+
+  /* Typography */
+  --font:           -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 /* ── Hero ── */
