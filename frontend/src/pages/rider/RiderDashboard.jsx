@@ -7,6 +7,7 @@ import { useToast } from '../../components/shared/Toast';
 import api from '../../api/axios';
 import '../../styles/app.css';
 import NotificationBell from '../../components/shared/NotificationBell';
+import { getMyRatings } from '../../api/auth';
 
 const SLA_MINUTES = 30;
 
