@@ -11,6 +11,7 @@ from apps.orders.models import Order
 from apps.users.permissions import IsCustomer
 from django.views.decorators.csrf import csrf_exempt
 from django.utils.decorators import method_decorator
+from apps.users.notifications import NotificationService
 
 logger = logging.getLogger(__name__)
 
@@ -135,6 +136,8 @@ class MpesaCallbackView(APIView):
                 order        = payment.order
                 order.status = Order.Status.PAID
                 order.save()
+                
+                NotificationService.payment_success(payment)
 
                 logger.info(
                     f"Payment SUCCESS — Order #{order.id} | "

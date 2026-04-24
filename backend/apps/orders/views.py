@@ -1,3 +1,6 @@
+from duckdb import order
+
+from apps.users.notifications import NotificationService
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -36,9 +39,8 @@ class CustomerOrderListCreateView(generics.ListCreateAPIView):
         ).prefetch_related('items')
 
     def perform_create(self, serializer):
-        # Inject the logged-in user as the customer
-        serializer.save(customer=self.request.user)
-
+        order = serializer.save(customer=self.request.user)
+        NotificationService.order_placed(order)
 
 class CustomerOrderDetailView(generics.RetrieveAPIView):
     """Customer views a single order — must own it."""
@@ -98,6 +100,9 @@ class AdminAssignRiderView(APIView):
         order.rider  = rider
         order.status = Order.Status.ASSIGNED
         order.save()
+        
+        NotificationService.rider_assigned(order)
+
 
         # Mark rider as unavailable
         if hasattr(rider, 'rider_profile'):
@@ -130,6 +135,13 @@ class AdminUpdateOrderStatusView(APIView):
         new_status   = serializer.validated_data['status']
         order.status = new_status
         order.save()
+        
+        if new_status == Order.Status.PICKED_UP:
+            NotificationService.order_picked_up(order)
+        elif new_status == Order.Status.DELIVERED:
+            NotificationService.order_delivered(order)
+        elif new_status == Order.Status.CANCELLED:
+            NotificationService.order_cancelled(order)
 
         # Free up rider when order completes or is cancelled
         if new_status in [Order.Status.DELIVERED, Order.Status.CANCELLED]:
@@ -192,6 +204,11 @@ class RiderUpdateOrderStatusView(APIView):
 
         order.status = serializer.validated_data['status']
         order.save()
+        
+        if order.status == Order.Status.PICKED_UP:
+            NotificationService.order_picked_up(order)
+        elif order.status == Order.Status.DELIVERED:
+            NotificationService.order_delivered(order)
 
         # Free up rider when delivered
         if order.status == Order.Status.DELIVERED:
