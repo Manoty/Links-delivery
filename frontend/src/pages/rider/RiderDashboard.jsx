@@ -52,39 +52,45 @@ export default function RiderDashboard() {
   const locationRef = useRef(null);
 
   const refresh = useCallback(async () => {
-    try {
-      const [profRes, availRes, mineRes] = await Promise.all([
-        api.get('/riders/profile/'),
-        getAvailableOrders(),
-        api.get('/orders/rider/'),
-      ]);
-      setProfile(profRes.data);
-      setIsOnline(profRes.data.is_available);
-      setAvailable(availRes.data);
+  try {
+    const [profRes, availRes, mineRes, ratingsRes] = await Promise.all([
+      api.get('/riders/profile/'),
+      getAvailableOrders(),
+      api.get('/orders/rider/'),
+      getMyRatings().catch(() => null), // prevents crash if endpoint fails
+    ]);
 
-      const mine = mineRes.data;
-      const active = mine.find(o => ['assigned','picked_up'].includes(o.status));
-      setActiveOrder(active || null);
+    setProfile(profRes.data);
+    setIsOnline(profRes.data.is_available);
+    setAvailable(availRes.data);
 
-      const delivered = mine.filter(o => o.status === 'delivered');
-      setHistory(delivered.slice(0, 10));
+    // ratings
+    if (ratingsRes?.data) {
+      setRatingData(ratingsRes.data);
+    }
 
-      const todayEarnings = delivered.reduce((s, o) => s + parseFloat(o.total_amount) * 0.15, 0);
-      setEarnings({
-        today:      Math.round(todayEarnings),
-        week:       Math.round(todayEarnings * 5.2),
-        deliveries: delivered.length,
-        avgTime:    21,
-      });
-    } catch {}
-    setLoading(false);
-  }, []);
+    const mine = mineRes.data;
+    const active = mine.find(o => ['assigned','picked_up'].includes(o.status));
+    setActiveOrder(active || null);
 
-  useEffect(() => { refresh(); }, [refresh]);
-  useEffect(() => {
-    const t = setInterval(refresh, 8000);
-    return () => clearInterval(t);
-  }, [refresh]);
+    const delivered = mine.filter(o => o.status === 'delivered');
+    setHistory(delivered.slice(0, 10));
+
+    const todayEarnings = delivered.reduce((s, o) => s + parseFloat(o.total_amount) * 0.15, 0);
+
+    setEarnings({
+      today:      Math.round(todayEarnings),
+      week:       Math.round(todayEarnings * 5.2),
+      deliveries: delivered.length,
+      avgTime:    21,
+    });
+
+  } catch (err) {
+    console.log('refresh error', err);
+  }
+
+  setLoading(false);
+}, []);
 
   const startLocationPush = () => {
     if (locationRef.current) return;
@@ -481,6 +487,83 @@ export default function RiderDashboard() {
                 ))}
               </div>
             </div>
+            {/* Ratings summary */}
+            {ratingData && ratingData.count > 0 && (
+              <div style={{ margin: '0 16px 12px' }}>
+                <div className="card" style={{ padding: '14px 16px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600 }}>Your ratings</div>
+                    <div style={{ fontSize: 13, color: 'var(--gray-400)' }}>
+                      {ratingData.count} reviews
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 14 }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 36, fontWeight: 700, lineHeight: 1 }}>
+                        {ratingData.average}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--gray-400)', marginTop: 2 }}>
+                        out of 5
+                      </div>
+                    </div>
+
+                    <div style={{ flex: 1 }}>
+                      {[5,4,3,2,1].map(star => {
+                        const count = ratingData.ratings.filter(r => r.stars === star).length;
+                        const pct = ratingData.count > 0 ? (count / ratingData.count) * 100 : 0;
+
+                        return (
+                          <div key={star} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                            <div style={{ fontSize: 11, color: 'var(--gray-400)', width: 12 }}>
+                              {star}
+                            </div>
+                            <div style={{ flex: 1, height: 4, background: 'var(--gray-100)', borderRadius: 2 }}>
+                              <div
+                                style={{
+                                  width: `${pct}%`,
+                                  height: 4,
+                                  background: '#BA7517',
+                                  borderRadius: 2,
+                                }}
+                              />
+                            </div>
+                            <div style={{ fontSize: 11, color: 'var(--gray-400)', width: 20 }}>
+                              {count}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Comments */}
+                  {ratingData.ratings
+                    .filter(r => r.comment)
+                    .slice(0, 3)
+                    .map(r => (
+                      <div key={r.id} style={{
+                        padding: '10px 12px',
+                        background: 'var(--gray-50)',
+                        borderRadius: 8,
+                        marginBottom: 6,
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <span style={{ color: '#BA7517', fontSize: 13 }}>
+                            {'★'.repeat(r.stars)}{'☆'.repeat(5 - r.stars)}
+                          </span>
+                          <span style={{ fontSize: 11, color: 'var(--gray-400)' }}>
+                            Order #{r.order}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 13, color: 'var(--gray-600)' }}>
+                          {r.comment}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
 
             {history.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '32px', color: 'var(--gray-400)', fontSize: 13 }}>
