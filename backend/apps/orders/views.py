@@ -1,9 +1,17 @@
-from apps.users.notifications import NotificationService
 from rest_framework import generics, status
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.shortcuts import get_object_or_404
+
+from .models import Order, OrderItem, Rating
+from .serializers import (
+    OrderCreateSerializer, OrderSerializer,
+    AssignRiderSerializer, UpdateOrderStatusSerializer,
+    CreateRatingSerializer, RatingSerializer,
+)
+from apps.users.notifications import NotificationService
+
 
 from .models import Order
 from .serializers import (
@@ -215,3 +223,78 @@ class RiderUpdateOrderStatusView(APIView):
                 request.user.rider_profile.save()
 
         return Response(OrderSerializer(order).data)
+    
+class CreateRatingView(APIView):
+    """
+    Customer submits a rating after delivery.
+    POST /api/orders/rate/
+    Body: { "order_id": 1, "stars": 5, "comment": "Great service!" }
+    """
+    permission_classes = [IsCustomer]
+
+    def post(self, request):
+        serializer = CreateRatingSerializer(
+            data=request.data,
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+
+        order = Order.objects.get(
+            id=serializer.validated_data['order_id']
+        )
+
+        rating = Rating.objects.create(
+            order    = order,
+            customer = request.user,
+            rider    = order.rider,
+            stars    = serializer.validated_data['stars'],
+            comment  = serializer.validated_data.get('comment', ''),
+        )
+
+        # Notify rider
+        NotificationService.rating_received(rating)
+
+        return Response(RatingSerializer(rating).data, status=status.HTTP_201_CREATED)
+
+
+class RiderRatingsView(generics.ListAPIView):
+    """
+    Rider views all their received ratings.
+    GET /api/orders/my-ratings/
+    Also returns average rating.
+    """
+    serializer_class   = RatingSerializer
+    permission_classes = [IsRider]
+
+    def get_queryset(self):
+        return Rating.objects.filter(
+            rider=self.request.user
+        ).select_related('order', 'customer')
+
+    def list(self, request, *args, **kwargs):
+        qs      = self.get_queryset()
+        ratings = RatingSerializer(qs, many=True).data
+        count   = qs.count()
+        avg     = (
+            round(sum(r.stars for r in qs) / count, 1)
+            if count else None
+        )
+        return Response({
+            'average':  avg,
+            'count':    count,
+            'ratings':  ratings,
+        })
+
+
+class AdminRiderRatingsView(generics.ListAPIView):
+    """
+    Admin views ratings for any rider.
+    GET /api/orders/admin/rider-ratings/<rider_id>/
+    """
+    serializer_class   = RatingSerializer
+    permission_classes = [IsAdmin]
+
+    def get_queryset(self):
+        return Rating.objects.filter(
+            rider_id=self.kwargs['rider_id']
+        ).select_related('order', 'customer')    

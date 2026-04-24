@@ -121,3 +121,45 @@ class UpdateOrderStatusSerializer(serializers.Serializer):
                 f"Cannot move from '{order.status}' to '{value}'."
             )
         return value
+    
+
+class RatingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model  = Rating
+        fields = ['id', 'order', 'rider', 'stars', 'comment', 'created_at']
+        read_only_fields = ['id', 'rider', 'created_at']
+
+
+class CreateRatingSerializer(serializers.ModelSerializer):
+    order_id = serializers.IntegerField()
+
+    class Meta:
+        model  = Rating
+        fields = ['order_id', 'stars', 'comment']
+
+    def validate_stars(self, value):
+        if not 1 <= value <= 5:
+            raise serializers.ValidationError('Stars must be between 1 and 5.')
+        return value
+
+    def validate_order_id(self, value):
+        request = self.context['request']
+        try:
+            order = Order.objects.get(
+                id=value,
+                customer=request.user,
+                status=Order.Status.DELIVERED,
+            )
+        except Order.DoesNotExist:
+            raise serializers.ValidationError(
+                'Order not found or not eligible for rating.'
+            )
+        if hasattr(order, 'rating'):
+            raise serializers.ValidationError(
+                'You have already rated this order.'
+            )
+        if not order.rider:
+            raise serializers.ValidationError(
+                'No rider to rate for this order.'
+            )
+        return value   
