@@ -1,5 +1,3 @@
-from duckdb import order
-
 from apps.users.notifications import NotificationService
 from rest_framework import generics, status
 from rest_framework.views import APIView

@@ -91,3 +91,41 @@ class OrderItem(models.Model):
     @property
     def subtotal(self):
         return self.quantity * self.price
+    
+class Rating(models.Model):
+    """
+    Customer rates a rider after successful delivery.
+    OneToOne with Order — one rating per order.
+
+    Why OneToOne?
+    Prevents double-rating the same order.
+    Also means we can always check order.rating to
+    know if this delivery has been rated.
+    """
+    order   = models.OneToOneField(
+        Order,
+        on_delete=models.CASCADE,
+        related_name='rating',
+    )
+    customer = models.ForeignKey(
+        'users.User',
+        on_delete=models.CASCADE,
+        related_name='given_ratings',
+    )
+    rider    = models.ForeignKey(
+        'users.User',
+        on_delete=models.CASCADE,
+        related_name='received_ratings',
+    )
+    stars    = models.PositiveSmallIntegerField(
+        choices=[(i, i) for i in range(1, 6)]
+    )
+    comment  = models.TextField(blank=True, default='')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes  = [models.Index(fields=['rider', '-created_at'])]
+
+    def __str__(self):
+        return f"Order #{self.order.id} — {self.stars}★ for {self.rider.username}"    
