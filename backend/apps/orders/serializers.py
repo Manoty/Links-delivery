@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Order, OrderItem
+from .models import Order, OrderItem, Rating
 from apps.users.serializers import UserSerializer
 
 
