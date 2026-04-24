@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { useTracking } from '../../hooks/useTracking';
 import StarRating from './StarRating';
 import { submitRating } from '../../api/auth';
 import { useToast } from './Toast';

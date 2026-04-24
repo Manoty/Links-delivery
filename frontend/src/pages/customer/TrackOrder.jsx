@@ -1,200 +1,211 @@
+import { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTracking } from '../../hooks/useTracking';
 import DeliveryMap from '../../components/map/DeliveryMap';
-import NotificationBell from '../../components/notifications/NotificationBell';
+import RatingModal from '../../components/shared/RatingModal';
+import NotificationBell from '../../components/shared/NotificationBell';
+import '../../styles/app.css';
 
-const STATUS_LABELS = {
-  pending:   { label: 'Order Placed',       color: '#f59e0b' },
-  paid:      { label: 'Payment Confirmed',  color: '#3b82f6' },
-  assigned:  { label: 'Rider Assigned',     color: '#8b5cf6' },
-  picked_up: { label: 'Order Picked Up',    color: '#f97316' },
-  delivered: { label: 'Delivered! 🎉',      color: '#16a34a' },
-  cancelled: { label: 'Cancelled',          color: '#ef4444' },
+const STATUS_META = {
+  pending:   { label: 'Order placed',      color: '#BA7517', step: 1 },
+  paid:      { label: 'Finding rider',     color: '#378ADD', step: 2 },
+  assigned:  { label: 'Rider assigned',    color: '#7F77DD', step: 3 },
+  picked_up: { label: 'On the way 🏍️',    color: '#1D9E75', step: 4 },
+  delivered: { label: 'Delivered! 🎉',     color: '#1D9E75', step: 5 },
+  cancelled: { label: 'Cancelled',         color: '#E24B4A', step: 0 },
 };
 
 export default function TrackOrder() {
-  const { orderId } = useParams();
-  const { tracking, history, error } = useTracking(orderId);
+  const { orderId }                        = useParams();
+  const { tracking, history, error }       = useTracking(orderId);
+  const [showRating, setShowRating]        = useState(false);
+  const [ratingDone, setRatingDone]        = useState(false);
 
-  const statusInfo = STATUS_LABELS[tracking?.order_status] || {};
+  const meta      = STATUS_META[tracking?.order_status] || {};
+  const isDelivered = tracking?.order_status === 'delivered';
+  const canRate   = isDelivered && tracking?.rider_name && !ratingDone;
 
   return (
-    <div style={styles.container}>
+    <div className="app-shell">
+      <div className="screen-content">
 
-      {/* Topbar */}
-      <div style={styles.topbar}>
-        <button
-          onClick={() => window.history.back()}
-          style={styles.backBtn}
-        >
-          ←
-        </button>
-
-        <div style={{ flex: 1 }}>
-          <div style={styles.topbarTitle}>
-            Tracking order #{orderId}
+        {/* Header */}
+        <div style={{
+          background: '#fff',
+          borderBottom: '0.5px solid var(--gray-200)',
+          padding: '14px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+        }}>
+          <button
+            onClick={() => window.history.back()}
+            style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer' }}
+          >
+            ←
+          </button>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 16, fontWeight: 600 }}>Order #{orderId}</div>
+            <div style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 1 }}>
+              Live tracking
+            </div>
           </div>
-          <div style={styles.topbarSub}>
-            Live updates every 5 seconds
-          </div>
+          <NotificationBell color="var(--gray-600)" />
         </div>
 
-        <NotificationBell />
+        {error && (
+          <div style={{ margin: '12px 16px', padding: '10px 14px', background: 'var(--red-50)', borderRadius: 10, fontSize: 13, color: 'var(--red-700)' }}>
+            {error}
+          </div>
+        )}
+
+        {/* Status banner */}
+        {tracking && (
+          <div style={{
+            margin: '12px 16px 0',
+            padding: '12px 16px',
+            borderRadius: 'var(--radius-lg)',
+            background: meta.color + '18',
+            borderLeft: `3px solid ${meta.color}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: meta.color }}>
+              {meta.label}
+            </div>
+            {tracking.eta_minutes && !isDelivered && (
+              <div style={{ textAlign: 'right' }}>
+                <div style={{ fontSize: 26, fontWeight: 800, color: meta.color, lineHeight: 1 }}>
+                  {tracking.eta_minutes}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--gray-400)' }}>min away</div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Map */}
+        <div style={{ margin: '12px 16px 0', borderRadius: 'var(--radius-lg)', overflow: 'hidden', border: '0.5px solid var(--gray-200)' }}>
+          <DeliveryMap tracking={tracking} history={history} />
+        </div>
+
+        {/* Rider card */}
+        {tracking?.rider_name && (
+          <div style={{ margin: '12px 16px 0' }}>
+            <div className="card" style={{ padding: '14px 16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div className="av av-md av-green">
+                  {tracking.rider_name.slice(0, 2).toUpperCase()}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>{tracking.rider_name}</div>
+                  <div style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 1 }}>
+                    {tracking.rider_phone}
+                  </div>
+                </div>
+                <a
+                  href={`tel:${tracking.rider_phone}`}
+                  style={{
+                    width: 40, height: 40, borderRadius: '50%',
+                    background: 'var(--green-50)',
+                    display: 'flex', alignItems: 'center',
+                    justifyContent: 'center', fontSize: 18,
+                    textDecoration: 'none',
+                  }}
+                >
+                  📞
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Progress steps */}
+        {tracking && (
+          <div style={{ margin: '12px 16px 0' }}>
+            <div className="card" style={{ padding: '14px 16px' }}>
+              <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 12 }}>Order progress</div>
+              <div className="step-track">
+                {['Placed', 'Paid', 'Assigned', 'In transit', 'Delivered'].map((label, i) => {
+                  const current = meta.step || 1;
+                  const isDone   = i + 1 < current;
+                  const isActive = i + 1 === current;
+                  return (
+                    <div className="step-item" key={label}>
+                      {i < 4 && <div className={`step-connector ${isDone ? 'done' : ''}`} />}
+                      <div className={`step-circle ${isDone ? 'done' : isActive ? 'active' : ''}`} />
+                      <div className={`step-label ${isActive ? 'active' : ''}`}>{label}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Delivered — rate CTA */}
+        {canRate && (
+          <div style={{ margin: '12px 16px 0' }}>
+            <div style={{
+              background: 'var(--green-700)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
+            }}>
+              <div style={{ fontSize: 28 }}>🎉</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>
+                  Your order arrived!
+                </div>
+                <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', marginTop: 1 }}>
+                  How was your delivery?
+                </div>
+              </div>
+              <button
+                onClick={() => setShowRating(true)}
+                style={{
+                  padding: '8px 14px',
+                  background: '#fff',
+                  color: 'var(--green-700)',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                Rate ★
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* No rider assigned yet */}
+        {tracking && !tracking.rider_name && !isDelivered && (
+          <div style={{ margin: '12px 16px', textAlign: 'center', padding: '20px' }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>⏳</div>
+            <div style={{ fontSize: 14, fontWeight: 500, marginBottom: 4 }}>Looking for a rider</div>
+            <div style={{ fontSize: 12, color: 'var(--gray-400)' }}>
+              We'll notify you once a rider is assigned
+            </div>
+          </div>
+        )}
+
+        <div style={{ height: 20 }} />
       </div>
 
-      {error && (
-        <div style={styles.error}>{error}</div>
-      )}
-
-      {/* Status badge */}
-      {tracking && (
-        <div style={{ ...styles.statusBadge, background: statusInfo.color }}>
-          {statusInfo.label}
-        </div>
-      )}
-
-      {/* ETA card */}
-      {tracking?.eta_minutes && (
-        <div style={styles.etaCard}>
-          <span style={styles.etaNumber}>{tracking.eta_minutes}</span>
-          <span style={styles.etaLabel}>minutes away</span>
-        </div>
-      )}
-
-      {/* Rider info */}
-      {tracking?.rider_name && (
-        <div style={styles.riderCard}>
-          <span>🏍️ <strong>{tracking.rider_name}</strong></span>
-          <span>📞 {tracking.rider_phone}</span>
-        </div>
-      )}
-
-      {/* Map */}
-      <div style={styles.mapWrapper}>
-        <DeliveryMap tracking={tracking} history={history} />
-      </div>
-
-      {/* No rider yet */}
-      {tracking && !tracking.rider_name && (
-        <div style={styles.waiting}>
-          ⏳ Waiting for a rider to be assigned...
-        </div>
-      )}
-
-      {/* Delivered */}
-      {tracking?.order_status === 'delivered' && (
-        <div style={styles.delivered}>
-          ✅ Your order has been delivered. Enjoy!
-        </div>
+      {/* Rating modal */}
+      {showRating && (
+        <RatingModal
+          order={{ id: orderId, rider: { username: tracking?.rider_name } }}
+          onClose={() => setShowRating(false)}
+          onSubmitted={() => setRatingDone(true)}
+        />
       )}
     </div>
   );
 }
-
-const styles = {
-  container: {
-    maxWidth: 680,
-    margin: '0 auto',
-    padding: '24px 16px',
-    fontFamily: 'sans-serif',
-  },
-
-  topbar: {
-    background: '#000',
-    padding: '16px 18px 14px',
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    borderRadius: 12,
-    marginBottom: 18,
-  },
-
-  backBtn: {
-    background: 'rgba(255,255,255,0.1)',
-    border: 'none',
-    borderRadius: '50%',
-    width: 36,
-    height: 36,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-    color: '#fff',
-    fontSize: 18,
-  },
-
-  topbarTitle: {
-    fontSize: 16,
-    fontWeight: 700,
-    color: '#fff',
-  },
-
-  topbarSub: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.5)',
-    marginTop: 1,
-  },
-
-  error: {
-    background: '#fee2e2',
-    color: '#dc2626',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-
-  statusBadge: {
-    display: 'inline-block',
-    color: '#fff',
-    padding: '6px 16px',
-    borderRadius: 20,
-    fontWeight: 600,
-    marginBottom: 16,
-  },
-
-  etaCard: {
-    display: 'flex',
-    alignItems: 'baseline',
-    gap: 8,
-    marginBottom: 16,
-  },
-
-  etaNumber: {
-    fontSize: 48,
-    fontWeight: 800,
-    color: '#16a34a',
-  },
-
-  etaLabel: {
-    fontSize: 18,
-    color: '#6b7280',
-  },
-
-  riderCard: {
-    display: 'flex',
-    gap: 24,
-    background: '#f3f4f6',
-    padding: '12px 16px',
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-
-  mapWrapper: {
-    marginBottom: 16,
-  },
-
-  waiting: {
-    textAlign: 'center',
-    color: '#6b7280',
-    padding: 24,
-  },
-
-  delivered: {
-    background: '#dcfce7',
-    color: '#15803d',
-    padding: 16,
-    borderRadius: 8,
-    textAlign: 'center',
-    fontWeight: 600,
-  },
-};
