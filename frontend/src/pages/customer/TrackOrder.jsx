@@ -1,6 +1,7 @@
 import { useParams } from 'react-router-dom';
 import { useTracking } from '../../hooks/useTracking';
 import DeliveryMap from '../../components/map/DeliveryMap';
+import NotificationBell from '../../components/notifications/NotificationBell';
 
 const STATUS_LABELS = {
   pending:   { label: 'Order Placed',       color: '#f59e0b' },
@@ -12,14 +13,34 @@ const STATUS_LABELS = {
 };
 
 export default function TrackOrder() {
-  const { orderId }          = useParams();
+  const { orderId } = useParams();
   const { tracking, history, error } = useTracking(orderId);
 
   const statusInfo = STATUS_LABELS[tracking?.order_status] || {};
 
   return (
     <div style={styles.container}>
-      <h2 style={styles.title}>📦 Tracking Order #{orderId}</h2>
+
+      {/* Topbar */}
+      <div style={styles.topbar}>
+        <button
+          onClick={() => window.history.back()}
+          style={styles.backBtn}
+        >
+          ←
+        </button>
+
+        <div style={{ flex: 1 }}>
+          <div style={styles.topbarTitle}>
+            Tracking order #{orderId}
+          </div>
+          <div style={styles.topbarSub}>
+            Live updates every 5 seconds
+          </div>
+        </div>
+
+        <NotificationBell />
+      </div>
 
       {error && (
         <div style={styles.error}>{error}</div>
@@ -71,15 +92,109 @@ export default function TrackOrder() {
 }
 
 const styles = {
-  container:   { maxWidth: 680, margin: '0 auto', padding: '24px 16px', fontFamily: 'sans-serif' },
-  title:       { fontSize: 22, fontWeight: 700, marginBottom: 16 },
-  error:       { background: '#fee2e2', color: '#dc2626', padding: 12, borderRadius: 8, marginBottom: 12 },
-  statusBadge: { display: 'inline-block', color: '#fff', padding: '6px 16px', borderRadius: 20, fontWeight: 600, marginBottom: 16 },
-  etaCard:     { display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 16 },
-  etaNumber:   { fontSize: 48, fontWeight: 800, color: '#16a34a' },
-  etaLabel:    { fontSize: 18, color: '#6b7280' },
-  riderCard:   { display: 'flex', gap: 24, background: '#f3f4f6', padding: '12px 16px', borderRadius: 8, marginBottom: 16 },
-  mapWrapper:  { marginBottom: 16 },
-  waiting:     { textAlign: 'center', color: '#6b7280', padding: 24 },
-  delivered:   { background: '#dcfce7', color: '#15803d', padding: 16, borderRadius: 8, textAlign: 'center', fontWeight: 600 },
+  container: {
+    maxWidth: 680,
+    margin: '0 auto',
+    padding: '24px 16px',
+    fontFamily: 'sans-serif',
+  },
+
+  topbar: {
+    background: '#000',
+    padding: '16px 18px 14px',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    borderRadius: 12,
+    marginBottom: 18,
+  },
+
+  backBtn: {
+    background: 'rgba(255,255,255,0.1)',
+    border: 'none',
+    borderRadius: '50%',
+    width: 36,
+    height: 36,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+    color: '#fff',
+    fontSize: 18,
+  },
+
+  topbarTitle: {
+    fontSize: 16,
+    fontWeight: 700,
+    color: '#fff',
+  },
+
+  topbarSub: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
+    marginTop: 1,
+  },
+
+  error: {
+    background: '#fee2e2',
+    color: '#dc2626',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+
+  statusBadge: {
+    display: 'inline-block',
+    color: '#fff',
+    padding: '6px 16px',
+    borderRadius: 20,
+    fontWeight: 600,
+    marginBottom: 16,
+  },
+
+  etaCard: {
+    display: 'flex',
+    alignItems: 'baseline',
+    gap: 8,
+    marginBottom: 16,
+  },
+
+  etaNumber: {
+    fontSize: 48,
+    fontWeight: 800,
+    color: '#16a34a',
+  },
+
+  etaLabel: {
+    fontSize: 18,
+    color: '#6b7280',
+  },
+
+  riderCard: {
+    display: 'flex',
+    gap: 24,
+    background: '#f3f4f6',
+    padding: '12px 16px',
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+
+  mapWrapper: {
+    marginBottom: 16,
+  },
+
+  waiting: {
+    textAlign: 'center',
+    color: '#6b7280',
+    padding: 24,
+  },
+
+  delivered: {
+    background: '#dcfce7',
+    color: '#15803d',
+    padding: 16,
+    borderRadius: 8,
+    textAlign: 'center',
+    fontWeight: 600,
+  },
 };
