@@ -8,6 +8,7 @@ import { getAllOrders } from '../../api/orders';
 import { getLiveRiders } from '../../api/tracking';
 import api from '../../api/axios';
 import '../../styles/dashboard.css';
+import NotificationBell from '../../components/shared/NotificationBell';
 
 const STATUS_COLORS = {
   pending:   { bg: '#FAEEDA', text: '#633806', kanban: '#FAEEDA' },
@@ -123,6 +124,11 @@ export default function AdminDashboard() {
               <span className="pulse" />
               Live
             </div>
+           
+            {/* Notifications */}
+           
+            <NotificationBell color="var(--gray-600)" />
+            
             <div className="tab-group">
               {['Today', '7 days', '30 days'].map(r => (
                 <button

@@ -129,14 +129,11 @@ export default function Home() {
             {/* Notification bell */}
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
               <NotificationBell />
-              <div style={{
-                width: 36, height: 36,
-                background: 'rgba(255,255,255,0.1)',
-                borderRadius: '50%',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 13, fontWeight: 700, color: '#fff',
-              }}>
-                {firstName.slice(0, 2).toUpperCase()}
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                <NotificationBell color="#fff" />
+                <div className="av av-sm av-white">
+                  {user?.username?.slice(0, 2).toUpperCase()}
+                </div>
               </div>
             </div>
           </div>

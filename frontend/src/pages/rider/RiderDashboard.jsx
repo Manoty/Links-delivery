@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../components/shared/Toast';
 import api from '../../api/axios';
 import '../../styles/app.css';
+import NotificationBell from '../../components/shared/NotificationBell';
 
 const SLA_MINUTES = 30;
 
@@ -177,6 +178,7 @@ export default function RiderDashboard() {
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <NotificationBell color="#fff" />
             <div className="toggle-wrap">
               <div style={{ fontSize: 11, color: isOnline ? '#9FE1CB' : 'rgba(255,255,255,0.4)' }}>
                 {isOnline ? 'Online' : 'Offline'}
