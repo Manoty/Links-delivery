@@ -42,6 +42,8 @@ export default function RiderDashboard() {
   const { user, logoutUser } = useAuth();
   const toast = useToast();
 
+  const [ratingData, setRatingData] = useState(null);
+
   const [profile,     setProfile]     = useState(null);
   const [isOnline,    setIsOnline]    = useState(false);
   const [activeOrder, setActiveOrder] = useState(null);
@@ -51,6 +53,7 @@ export default function RiderDashboard() {
   const [tab,         setTab]         = useState('active');
   const [loading,     setLoading]     = useState(true);
   const locationRef = useRef(null);
+
 
   const refresh = useCallback(async () => {
   try {
