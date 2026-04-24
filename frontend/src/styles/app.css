@@ -551,3 +551,22 @@
   background: #fff;
   padding: 14px 18px;
 }
+
+/* Web responsive */
+@media (max-width: 768px) {
+  .hero-section {
+    grid-template-columns: 1fr !important;
+    padding: 32px 4% 0 !important;
+  }
+  .hero-right-panel { display: none !important; }
+  .promo-strip-grid { grid-template-columns: 1fr !important; }
+  .resto-grid { grid-template-columns: 1fr 1fr !important; }
+  .menu-grid-web { grid-template-columns: 1fr 1fr !important; }
+  .cat-grid-web { grid-template-columns: repeat(4, 1fr) !important; }
+  .body-padding { padding: 0 4% !important; }
+}
+
+@media (max-width: 480px) {
+  .resto-grid { grid-template-columns: 1fr !important; }
+  .menu-grid-web { grid-template-columns: 1fr 1fr !important; }
+}
