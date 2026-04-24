@@ -276,3 +276,29 @@ class NearestRidersView(APIView):
             "order_id": order.id,
             "riders": results,
         })
+class ActiveRidersView(APIView):
+    """
+    Admin sees all active riders
+    """
+    permission_classes = [IsRiderOrAdmin]
+
+    def get(self, request):
+        profiles = RiderProfile.objects.filter(
+            is_available=True,
+            current_lat__isnull=False,
+            current_lng__isnull=False,
+        ).select_related('user')
+
+        data = [
+            {
+                'rider_id': p.user.id,
+                'username': p.user.username,
+                'phone': p.user.phone_number,
+                'vehicle_type': p.vehicle_type,
+                'latitude': str(p.current_lat),
+                'longitude': str(p.current_lng),
+            }
+            for p in profiles
+        ]
+
+        return Response(data)        

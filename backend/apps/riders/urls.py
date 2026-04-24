@@ -28,4 +28,5 @@ urlpatterns = [
     path('dispatch/<int:order_id>/',        AutoDispatchView.as_view(),     name='auto-dispatch'),
     path('dispatch/logs/',                  DispatchLogListView.as_view(),  name='dispatch-logs'),
     path('nearest/<int:order_id>/',         NearestRidersView.as_view(),    name='nearest-riders'),
+    path('active/', ActiveRidersView.as_view()),
 ]
