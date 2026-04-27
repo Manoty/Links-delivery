@@ -570,3 +570,13 @@
   .resto-grid { grid-template-columns: 1fr !important; }
   .menu-grid-web { grid-template-columns: 1fr 1fr !important; }
 }
+
+/* Auth pages responsive */
+@media (max-width: 700px) {
+  .auth-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .auth-left-panel {
+    display: none !important;
+  }
+}
