@@ -48,7 +48,7 @@ export default function AuthLayout({ children, mode = 'login' }) {
       justifyContent: 'center',
       padding: '24px 16px',
     }}>
-      <div style={{
+      <div className="auth-grid" style={{
         display: 'grid',
         gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)',
         width: '100%',
@@ -60,7 +60,7 @@ export default function AuthLayout({ children, mode = 'login' }) {
       }}>
 
         {/* ── LEFT PANEL ── */}
-        <div style={{
+        <div className="auth-left-panel" style={{
           background: '#1A1207',
           padding: '44px 40px',
           display: 'flex',
