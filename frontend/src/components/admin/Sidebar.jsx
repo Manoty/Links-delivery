@@ -14,7 +14,7 @@ const NAV = [
   {
     section: 'Analytics',
     items: [
-      { to: '/admin/revenue', label: 'Revenue',       icon: '↗',  badge: null },
+      { to: '/admin/analytics', label: 'Analytics', icon: '↗', badge: null },
       { to: '/admin/dispatch-logs', label: 'Dispatch logs', icon: '◷', badge: null },
     ]
   },

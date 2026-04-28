@@ -10,6 +10,7 @@ import PlaceOrder     from './pages/customer/PlaceOrder';
 import TrackOrder     from './pages/customer/TrackOrder';
 import RiderDashboard from './pages/rider/RiderDashboard';
 import AdminDashboard from './pages/admin/AdminDashboard';
+import Analytics      from './pages/admin/Analytics';
 
 function ProtectedRoute({ children, allowedRoles }) {
   const { user } = useAuth();
@@ -61,6 +62,11 @@ function AppRoutes() {
       <Route path="/admin" element={
         <ProtectedRoute allowedRoles={['admin']}>
           <AdminDashboard />
+        </ProtectedRoute>
+      }/>
+      <Route path="/admin/analytics" element={
+        <ProtectedRoute allowedRoles={['admin']}>
+          <Analytics />
         </ProtectedRoute>
       }/>
 
