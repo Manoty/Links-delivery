@@ -14,3 +14,10 @@ export const updateOrderStatus = (id, s)   => api.put(`/orders/rider/${id}/statu
 // Admin
 export const getAllOrders     = (params)   => api.get('/orders/admin/', { params });
 export const assignRider      = (id, rid)  => api.post(`/orders/admin/${id}/assign/`, { rider_id: rid });
+
+export const getAnalyticsKpi         = ()       => api.get('/analytics/kpi/');
+export const getRevenueTrend         = (range)  => api.get(`/analytics/revenue/?range=${range}`);
+export const getPeakHours            = ()       => api.get('/analytics/peak-hours/');
+export const getHeatmap              = ()       => api.get('/analytics/heatmap/');
+export const getZonePerformance      = ()       => api.get('/analytics/zones/');
+export const getRiderLeaderboard     = (metric) => api.get(`/analytics/leaderboard/?metric=${metric}`);
