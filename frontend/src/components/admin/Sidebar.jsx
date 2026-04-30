@@ -2,89 +2,57 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 const NAV = [
-  {
-    section: 'Main',
-    items: [
-      { to: '/admin',         label: 'Overview',      icon: '▦', badge: null },
-      { to: '/admin/orders',  label: 'Orders',        icon: '≡',  badge: 4 },
-      { to: '/admin/riders',  label: 'Riders',        icon: '◉',  badge: null },
-      { to: '/admin/customers', label: 'Customers',   icon: '◎',  badge: null },
-    ]
-  },
-  {
-    section: 'Analytics',
-    items: [
-      { to: '/admin/analytics', label: 'Analytics', icon: '↗', badge: null },
-      { to: '/admin/dispatch-logs', label: 'Dispatch logs', icon: '◷', badge: null },
-    ]
-  },
-  {
-    section: 'System',
-    items: [
-      { to: '/admin/settings', label: 'Settings',    icon: '⚙',  badge: null },
-    ]
-  },
+  { to: '/admin',           icon: '⊞',  label: 'Overview',      end: true  },
+  { to: '/admin/orders',    icon: '≡',  label: 'Orders',        badge: null },
+  { to: '/admin/riders',    icon: '◉',  label: 'Riders'                    },
+  { to: '/admin/analytics', icon: '↗',  label: 'Analytics'                 },
+  { to: '/admin/settings',  icon: '⚙',  label: 'Settings'                  },
 ];
 
 export default function Sidebar() {
   const { user, logoutUser } = useAuth();
   const navigate = useNavigate();
-
   const initials = user?.username?.slice(0, 2).toUpperCase() || 'AD';
 
   return (
     <aside className="sidebar">
-      <div className="sidebar-logo">
-        <div className="logo-mark">🛵</div>
-        <div>
-          <div style={{ fontSize: 14, fontWeight: 500 }}>Scott Delivery</div>
-          <div style={{ fontSize: 11, color: 'var(--gray-400)' }}>Operations</div>
-        </div>
+      {/* Scott logo mark */}
+      <div
+        className="sidebar-logo"
+        onClick={() => navigate('/admin')}
+        title="Scott. Operations"
+      >
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M4 10l4 4 8-8" stroke="#fff" strokeWidth="2.5"
+            strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
       </div>
 
-      <nav className="sidebar-nav">
-        {NAV.map(group => (
-          <div key={group.section}>
-            <div className="nav-section">{group.section}</div>
-            {group.items.map(item => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/admin'}
-                className={({ isActive }) =>
-                  `nav-item ${isActive ? 'active' : ''}`
-                }
-              >
-                <span style={{ fontSize: 14, width: 16, textAlign: 'center' }}>
-                  {item.icon}
-                </span>
-                {item.label}
-                {item.badge && (
-                  <span className="nav-badge">{item.badge}</span>
-                )}
-              </NavLink>
-            ))}
-          </div>
-        ))}
-      </nav>
+      {/* Nav items */}
+      {NAV.map(item => (
+        <NavLink
+          key={item.to}
+          to={item.to}
+          end={item.end}
+          title={item.label}
+          className={({ isActive }) =>
+            `nav-icon-item ${isActive ? 'active' : ''}`
+          }
+        >
+          <span style={{ fontSize: 16 }}>{item.icon}</span>
+          {item.badge && <span className="nav-badge">{item.badge}</span>}
+        </NavLink>
+      ))}
 
-      <div className="sidebar-footer">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px' }}>
-          <div className="avatar" style={{ background: '#E6F1FB', color: '#0C447C' }}>
-            {initials}
-          </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>{user?.username}</div>
-            <div style={{ fontSize: 11, color: 'var(--gray-400)' }}>Super admin</div>
-          </div>
-          <button
-            className="btn"
-            style={{ padding: '4px 8px', fontSize: 11 }}
-            onClick={logoutUser}
-          >
-            Out
-          </button>
-        </div>
+      <div className="sidebar-spacer" />
+
+      {/* Logout avatar */}
+      <div
+        className="sidebar-avatar"
+        onClick={logoutUser}
+        title={`${user?.username} — click to sign out`}
+      >
+        {initials}
       </div>
     </aside>
   );
