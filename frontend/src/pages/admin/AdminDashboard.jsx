@@ -1,74 +1,87 @@
 import { useState, useEffect, useCallback } from 'react';
 import { format } from 'date-fns';
+import {
+  AreaChart, Area, BarChart, Bar,
+  XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, Cell,
+} from 'recharts';
 import Sidebar from '../../components/admin/Sidebar';
-import KpiCard from '../../components/admin/KpiCard';
-import RevenueChart from '../../components/admin/RevenueChart';
 import OrdersTable from '../../components/admin/OrdersTable';
-import { getAllOrders } from '../../api/orders';
+import { getAllOrders, autoDispatch } from '../../api/orders';
 import { getLiveRiders } from '../../api/tracking';
+import NotificationBell from '../../components/shared/NotificationBell';
 import api from '../../api/axios';
 import '../../styles/dashboard.css';
-import NotificationBell from '../../components/shared/NotificationBell';
 
 const STATUS_COLORS = {
-  pending:   { bg: '#FAEEDA', text: '#633806', kanban: '#FAEEDA' },
-  paid:      { bg: '#E6F1FB', text: '#0C447C', kanban: '#E6F1FB' },
-  assigned:  { bg: '#EEEDFE', text: '#3C3489', kanban: '#EEEDFE' },
-  picked_up: { bg: '#FBEAF0', text: '#72243E', kanban: '#FBEAF0' },
-  delivered: { bg: '#E1F5EE', text: '#085041', kanban: '#E1F5EE' },
-  cancelled: { bg: '#FCEBEB', text: '#791F1F', kanban: '#FCEBEB' },
+  pending:   { bg: '#FAEEDA', tc: '#633806',  bar: '#BA7517' },
+  paid:      { bg: '#E1F5EE', tc: '#085041',  bar: '#1D9E75' },
+  assigned:  { bg: '#EEEDFE', tc: '#3C3489',  bar: '#7F77DD' },
+  picked_up: { bg: '#FBEAF0', tc: '#72243E',  bar: '#D4537E' },
+  delivered: { bg: '#E1F5EE', tc: '#085041',  bar: '#1D9E75' },
+  cancelled: { bg: '#FCEBEB', tc: '#791F1F',  bar: '#E24B4A' },
 };
 
 const RIDER_COLORS = [
-  { bg: '#E1F5EE', text: '#085041' },
-  { bg: '#E6F1FB', text: '#0C447C' },
-  { bg: '#EEEDFE', text: '#3C3489' },
-  { bg: '#FAEEDA', text: '#633806' },
-  { bg: '#FBEAF0', text: '#72243E' },
+  { bg:'#E1F5EE', tc:'#085041' },
+  { bg:'#E6F1FB', tc:'#0C447C' },
+  { bg:'#EEEDFE', tc:'#3C3489' },
+  { bg:'#FAEEDA', tc:'#633806' },
+  { bg:'#FBEAF0', tc:'#72243E' },
 ];
 
-function generateChartData(range) {
-  if (range === 'Today') {
-    const hours = ['6am','7am','8am','9am','10am','11am','12pm','1pm','2pm','3pm','4pm','5pm','6pm'];
-    return hours.map((h, i) => ({
-      label: h,
-      revenue: Math.round(800 + Math.sin(i * 0.8) * 400 + i * 700 + Math.random() * 500),
-      orders:  Math.round(5 + i * 5 + Math.random() * 8),
-    }));
-  }
-  if (range === '7 days') {
-    const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-    return days.map(d => ({
-      label: d,
-      revenue: Math.round(40000 + Math.random() * 30000),
-      orders:  Math.round(80 + Math.random() * 60),
-    }));
-  }
-  const weeks = Array.from({ length: 4 }, (_, i) => `Week ${i + 1}`);
-  return weeks.map(w => ({
-    label: w,
-    revenue: Math.round(200000 + Math.random() * 100000),
-    orders:  Math.round(400 + Math.random() * 200),
+const KANBAN_COLS = [
+  { key:'pending',   label:'Pending'  },
+  { key:'paid',      label:'Paid'     },
+  { key:'assigned',  label:'Assigned' },
+  { key:'picked_up', label:'Transit'  },
+  { key:'delivered', label:'Done'     },
+];
+
+function genChartData(range) {
+  const days  = range === '7d' ? 7 : 30;
+  const labels = range === '7d'
+    ? ['Mon','Tue','Wed','Thu','Fri','Sat','Sun']
+    : Array.from({ length: 30 }, (_, i) => {
+        const d = new Date(); d.setDate(d.getDate() - 29 + i);
+        return `${d.getDate()}/${d.getMonth()+1}`;
+      });
+  return labels.map(l => ({
+    date:    l,
+    revenue: Math.round(30000 + Math.random() * 70000),
+    orders:  Math.round(40 + Math.random() * 90),
   }));
 }
 
-const KANBAN_COLS = [
-  { key: 'pending',   label: 'Pending' },
-  { key: 'paid',      label: 'Paid' },
-  { key: 'assigned',  label: 'Assigned' },
-  { key: 'picked_up', label: 'In transit' },
-  { key: 'delivered', label: 'Delivered' },
-];
+const CustomTooltip = ({ active, payload, label }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{
+      background:'#fff', border:'1px solid #F0EBE3',
+      borderRadius:10, padding:'10px 14px', fontSize:12,
+    }}>
+      <div style={{ fontWeight:700, marginBottom:6, color:'#1A1207' }}>{label}</div>
+      {payload.map((p,i) => (
+        <div key={i} style={{ color:p.color, marginBottom:2 }}>
+          {p.name}: {p.name === 'Revenue'
+            ? `KES ${Math.round(p.value).toLocaleString()}`
+            : p.value}
+        </div>
+      ))}
+    </div>
+  );
+};
 
 export default function AdminDashboard() {
   const [orders,      setOrders]      = useState([]);
   const [liveRiders,  setLiveRiders]  = useState([]);
   const [allRiders,   setAllRiders]   = useState([]);
   const [loading,     setLoading]     = useState(true);
-  const [range,       setRange]       = useState('Today');
+  const [range,       setRange]       = useState('7d');
   const [statusFilter,setStatusFilter]= useState('all');
-  const [chartData,   setChartData]   = useState(() => generateChartData('Today'));
-  const [view,        setView]        = useState('overview'); // overview | orders
+  const [view,        setView]        = useState('overview');
+  const [chartData,   setChartData]   = useState(() => genChartData('7d'));
+  const [dispatching, setDispatching] = useState(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -87,61 +100,60 @@ export default function AdminDashboard() {
 
   useEffect(() => { refresh(); }, [refresh]);
   useEffect(() => { const t = setInterval(refresh, 10000); return () => clearInterval(t); }, [refresh]);
-  useEffect(() => { setChartData(generateChartData(range)); }, [range]);
+  useEffect(() => { setChartData(genChartData(range)); }, [range]);
 
-  const byStatus = (s) => orders.filter(o => o.status === s);
-
-  const totalRevenue = orders
-    .filter(o => o.status === 'delivered')
-    .reduce((sum, o) => sum + parseFloat(o.total_amount || 0), 0);
-
-  const activeOrders = orders.filter(o =>
-    ['assigned', 'picked_up'].includes(o.status)
+  const byStatus  = s => orders.filter(o => o.status === s);
+  const totalRev  = orders.filter(o => o.status === 'delivered')
+    .reduce((s, o) => s + parseFloat(o.total_amount || 0), 0);
+  const activeOrd = orders.filter(o =>
+    ['assigned','picked_up'].includes(o.status)
   ).length;
 
-  const deliveredToday = byStatus('delivered').length;
-
-  const filteredOrders = statusFilter === 'all'
-    ? orders
-    : orders.filter(o => o.status === statusFilter);
+  const handleAutoDispatch = async (orderId) => {
+    setDispatching(orderId);
+    try {
+      const res = await autoDispatch(orderId);
+      alert(`Dispatched to ${res.data.rider_name} · ${res.data.distance_km}km away`);
+      await refresh();
+    } catch (err) {
+      alert(err.response?.data?.reason || 'No riders available.');
+    } finally { setDispatching(null); }
+  };
 
   return (
     <div className="dashboard-shell">
       <Sidebar />
 
-      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ display:'flex', flexDirection:'column', overflow:'hidden' }}>
 
         {/* Topbar */}
         <div className="topbar">
           <div>
-            <div style={{ fontSize: 16, fontWeight: 500 }}>Operations overview</div>
-            <div style={{ fontSize: 12, color: 'var(--gray-400)', marginTop: 1 }}>
-              {format(new Date(), "EEEE, d MMMM yyyy")} — Nairobi
+            <div className="topbar-brand">
+              Scott<span>.</span> Operations
+            </div>
+            <div className="topbar-sub">
+              {format(new Date(), "EEEE d MMMM yyyy")} · Nairobi
             </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--gray-600)' }}>
-              <span className="pulse" />
+          <div style={{ display:'flex', alignItems:'center', gap:12 }}>
+            <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'#6B5E52' }}>
+              <span className="pulse-live" />
               Live
             </div>
-           
-            {/* Notifications */}
-           
-            <NotificationBell color="var(--gray-600)" />
-            
             <div className="tab-group">
-              {['Today', '7 days', '30 days'].map(r => (
+              {['Today','7 days','30 days'].map(r => (
                 <button
                   key={r}
-                  className={`tab-btn ${range === r ? 'active' : ''}`}
-                  onClick={() => setRange(r)}
+                  className={`tab-btn ${range === (r==='Today'?'7d':r==='7 days'?'7d':'30d') ? 'active' : ''}`}
+                  onClick={() => setRange(r === '30 days' ? '30d' : '7d')}
                 >
                   {r}
                 </button>
               ))}
             </div>
             <div className="tab-group">
-              {['overview', 'orders'].map(v => (
+              {['overview','orders'].map(v => (
                 <button
                   key={v}
                   className={`tab-btn ${view === v ? 'active' : ''}`}
@@ -151,46 +163,32 @@ export default function AdminDashboard() {
                 </button>
               ))}
             </div>
+            <NotificationBell />
           </div>
         </div>
 
         {/* Content */}
         <div className="dash-content">
 
-          {/* KPIs */}
+          {/* KPI row */}
           <div className="kpi-grid">
-            <KpiCard
-              label="Total revenue"
-              value={`KES ${Math.round(totalRevenue).toLocaleString()}`}
-              delta="12.4% vs yesterday"
-              deltaType="up"
-              accentColor="#1D9E75"
-              icon="💰"
-            />
-            <KpiCard
-              label="Orders today"
-              value={orders.length}
-              delta={`${activeOrders} active now`}
-              deltaType="up"
-              accentColor="#378ADD"
-              icon="📋"
-            />
-            <KpiCard
-              label="Active riders"
-              value={liveRiders.length}
-              delta={`${allRiders.filter(r => r.is_available).length} available`}
-              deltaType="up"
-              accentColor="#BA7517"
-              icon="🏍️"
-            />
-            <KpiCard
-              label="Delivered today"
-              value={deliveredToday}
-              delta="Avg 24 min"
-              deltaType={deliveredToday > 80 ? 'up' : 'down'}
-              accentColor="#7F77DD"
-              icon="✅"
-            />
+            {[
+              { label:'Total revenue',    value:`KES ${Math.round(totalRev).toLocaleString()}`, delta:'12.4% vs yesterday', type:'up',   accent:'#E8521A', icon:'💰' },
+              { label:'Orders today',     value:orders.length,                                  delta:`${activeOrd} active`, type:'up',   accent:'#1D9E75', icon:'📋' },
+              { label:'Active riders',    value:liveRiders.length,                              delta:`${allRiders.filter(r=>r.is_available).length} available`, type:'up', accent:'#378ADD', icon:'🏍️' },
+              { label:'Delivered today',  value:byStatus('delivered').length,                   delta:'Avg 24 min',          type:'up',   accent:'#BA7517', icon:'✅' },
+            ].map(k => (
+              <div className="kpi-card" key={k.label}>
+                <div className="kpi-accent" style={{ background:k.accent }} />
+                <div style={{ flex:1 }}>
+                  <div className="kpi-label">{k.icon} {k.label}</div>
+                  <div className="kpi-value">{k.value}</div>
+                  <div className={`kpi-delta delta-${k.type}`}>
+                    {k.type === 'up' ? '↑' : '↓'} {k.delta}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
 
           {view === 'overview' && (
@@ -199,40 +197,61 @@ export default function AdminDashboard() {
               <div className="two-col">
                 <div className="dash-card">
                   <div className="card-head">
-                    <div className="card-title">Revenue &amp; orders — {range}</div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <span style={{ fontSize: 12, color: '#0F6E56', background: '#E1F5EE', padding: '3px 10px', borderRadius: 20 }}>
-                        KES {Math.round(totalRevenue).toLocaleString()}
-                      </span>
+                    <div className="card-title">Revenue trend</div>
+                    <div className="tab-group">
+                      {['7d','30d'].map(r => (
+                        <button
+                          key={r}
+                          className={`tab-btn ${range === r ? 'active' : ''}`}
+                          onClick={() => setRange(r)}
+                        >
+                          {r === '7d' ? '7 days' : '30 days'}
+                        </button>
+                      ))}
                     </div>
                   </div>
                   <div className="card-body">
-                    <RevenueChart data={chartData} type="area" />
+                    <ResponsiveContainer width="100%" height={180}>
+                      <AreaChart data={chartData} margin={{ top:4, right:4, left:0, bottom:0 }}>
+                        <defs>
+                          <linearGradient id="revGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%"  stopColor="#E8521A" stopOpacity={0.15}/>
+                            <stop offset="95%" stopColor="#E8521A" stopOpacity={0}/>
+                          </linearGradient>
+                          <linearGradient id="ordGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%"  stopColor="#1D9E75" stopOpacity={0.1}/>
+                            <stop offset="95%" stopColor="#1D9E75" stopOpacity={0}/>
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#F0EBE3"/>
+                        <XAxis dataKey="date" tick={{ fontSize:11, fill:'#B0A396' }} axisLine={false} tickLine={false}/>
+                        <YAxis tick={{ fontSize:11, fill:'#B0A396' }} axisLine={false} tickLine={false}
+                          tickFormatter={v=>`${(v/1000).toFixed(0)}k`}/>
+                        <Tooltip content={<CustomTooltip/>}/>
+                        <Area type="monotone" dataKey="revenue" name="Revenue"
+                          stroke="#E8521A" strokeWidth={2} fill="url(#revGrad)" dot={false}/>
+                        <Area type="monotone" dataKey="orders" name="Orders"
+                          stroke="#1D9E75" strokeWidth={1.5} fill="url(#ordGrad)" dot={false}/>
+                      </AreaChart>
+                    </ResponsiveContainer>
                   </div>
                 </div>
 
                 <div className="dash-card">
                   <div className="card-head">
-                    <div className="card-title">Live activity feed</div>
-                    <span className="pulse" />
+                    <div className="card-title">Live activity</div>
+                    <span className="pulse-live"/>
                   </div>
                   <div className="feed-list">
                     {orders.slice(0, 6).map((order, i) => {
-                      const dots = {
-                        delivered: '#1D9E75',
-                        picked_up: '#378ADD',
-                        assigned:  '#7F77DD',
-                        paid:      '#BA7517',
-                        pending:   '#9CA3AF',
-                        cancelled: '#E24B4A',
-                      };
+                      const dots = { delivered:'#1D9E75', picked_up:'#378ADD', assigned:'#7F77DD', paid:'#BA7517', pending:'#B0A396', cancelled:'#E24B4A' };
                       return (
                         <div className="feed-row" key={order.id}>
-                          <div className="feed-dot" style={{ background: dots[order.status] }} />
+                          <div className="feed-dot" style={{ background:dots[order.status] }}/>
                           <div>
                             <div className="feed-text">
-                              Order #{order.id} — {order.status.replace('_', ' ')}
-                              {i === 0 && <span className="new-chip">new</span>}
+                              Order #{order.id} — {order.status.replace('_',' ')}
+                              {i===0 && <span className="new-chip">new</span>}
                             </div>
                             <div className="feed-time">
                               {order.customer?.username} · {order.delivery_address}
@@ -242,7 +261,7 @@ export default function AdminDashboard() {
                       );
                     })}
                     {orders.length === 0 && (
-                      <div style={{ padding: 24, textAlign: 'center', color: 'var(--gray-400)' }}>
+                      <div style={{ padding:24, textAlign:'center', color:'#B0A396', fontSize:13 }}>
                         No activity yet
                       </div>
                     )}
@@ -254,23 +273,21 @@ export default function AdminDashboard() {
               <div className="dash-card">
                 <div className="card-head">
                   <div className="card-title">Orders kanban</div>
-                  <div style={{ fontSize: 12, color: 'var(--gray-400)' }}>
-                    {orders.length} total · drag to move (Phase 2)
-                  </div>
+                  <div style={{ fontSize:12, color:'#B0A396' }}>{orders.length} total</div>
                 </div>
                 <div className="kanban-board">
                   {KANBAN_COLS.map(col => {
                     const colOrders = byStatus(col.key);
-                    const colors = STATUS_COLORS[col.key];
+                    const c = STATUS_COLORS[col.key] || {};
                     return (
                       <div className="kanban-col" key={col.key}>
                         <div className="kanban-col-head">
                           {col.label}
-                          <div className="k-count" style={{ background: colors.bg, color: colors.text }}>
+                          <div className="k-count" style={{ background:c.bg, color:c.tc }}>
                             {colOrders.length}
                           </div>
                         </div>
-                        {colOrders.slice(0, 3).map(order => (
+                        {colOrders.slice(0,3).map(order => (
                           <div className="k-card" key={order.id}>
                             <div className="k-card-id">#{order.id}</div>
                             <div className="k-card-name">{order.customer?.username}</div>
@@ -278,27 +295,44 @@ export default function AdminDashboard() {
                               KES {parseFloat(order.total_amount).toLocaleString()}
                             </div>
                             {order.rider && (
-                              <div style={{ fontSize: 10, color: '#0F6E56', marginTop: 3 }}>
+                              <div style={{ fontSize:10, color:'#1D9E75', marginTop:3 }}>
                                 🏍 {order.rider.username}
                               </div>
                             )}
                             {col.key === 'picked_up' && (
-                              <div style={{ fontSize: 10, color: '#0F6E56', marginTop: 3 }}>
-                                ETA ~{Math.round(Math.random() * 8 + 2)} min
+                              <div style={{ fontSize:10, color:'#E8521A', marginTop:3 }}>
+                                ETA ~{Math.round(Math.random()*8+2)} min
                               </div>
                             )}
-                            <div className="k-bar"
-                              style={{ background: colors.bg, width: col.key === 'delivered' ? '100%' : col.key === 'picked_up' ? '65%' : '100%' }}
-                            />
+                            {col.key === 'paid' && (
+                              <button
+                                onClick={() => handleAutoDispatch(order.id)}
+                                disabled={dispatching === order.id}
+                                style={{
+                                  width:'100%', marginTop:6,
+                                  padding:'5px', background:'#E8521A',
+                                  border:'none', borderRadius:6,
+                                  color:'#fff', fontSize:10,
+                                  fontWeight:700, cursor:'pointer',
+                                }}
+                              >
+                                {dispatching === order.id ? '...' : 'Auto dispatch'}
+                              </button>
+                            )}
+                            <div className="k-bar" style={{ background:c.bg, width:'100%' }}/>
                           </div>
                         ))}
                         {colOrders.length > 3 && (
-                          <div style={{ fontSize: 11, color: 'var(--gray-400)', textAlign: 'center', padding: '4px 0' }}>
+                          <div style={{ fontSize:11, color:'#B0A396', textAlign:'center', padding:'4px 0' }}>
                             +{colOrders.length - 3} more
                           </div>
                         )}
                         {colOrders.length === 0 && (
-                          <div style={{ border: '0.5px dashed var(--gray-200)', borderRadius: 8, padding: '16px', textAlign: 'center', fontSize: 11, color: 'var(--gray-400)' }}>
+                          <div style={{
+                            border:'1px dashed #F0EBE3', borderRadius:8,
+                            padding:16, textAlign:'center',
+                            fontSize:11, color:'#B0A396',
+                          }}>
                             Empty
                           </div>
                         )}
@@ -308,71 +342,66 @@ export default function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Riders */}
+              {/* Live riders */}
               <div className="dash-card">
                 <div className="card-head">
                   <div className="card-title">Active riders</div>
-                  <div style={{ fontSize: 12, color: 'var(--gray-400)' }}>
-                    {liveRiders.length} live · {allRiders.filter(r => r.is_available).length} available
+                  <div style={{ fontSize:12, color:'#B0A396' }}>
+                    {liveRiders.length} live · {allRiders.filter(r=>r.is_available).length} available
                   </div>
                 </div>
                 {liveRiders.length === 0 ? (
-                  <div style={{ padding: 32, textAlign: 'center', color: 'var(--gray-400)' }}>
-                    No riders online. Riders appear here when they push a location update.
+                  <div style={{ padding:32, textAlign:'center', color:'#B0A396', fontSize:13 }}>
+                    No riders online right now
                   </div>
                 ) : (
                   <div className="rider-grid">
                     {liveRiders.map((rider, i) => {
                       const color = RIDER_COLORS[i % RIDER_COLORS.length];
-                      const initials = rider.rider_name?.slice(0, 2).toUpperCase() || '??';
-                      const isAvailable = !rider.active_order_id;
+                      const isAvail = !rider.active_order_id;
                       return (
                         <div className="rider-tile" key={rider.rider_id}>
-                          <div className="rider-tile-top">
-                            <div className="r-avatar" style={{ background: color.bg, color: color.text }}>
-                              {initials}
+                          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+                            <div style={{
+                              width:36, height:36, borderRadius:'50%',
+                              background:color.bg, color:color.tc,
+                              display:'flex', alignItems:'center',
+                              justifyContent:'center', fontSize:12,
+                              fontWeight:700, flexShrink:0,
+                            }}>
+                              {rider.rider_name?.slice(0,2).toUpperCase()}
                             </div>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontWeight: 500, fontSize: 13 }}>{rider.rider_name}</div>
-                              <div style={{ fontSize: 11, color: 'var(--gray-400)' }}>{rider.vehicle_type}</div>
+                            <div style={{ flex:1 }}>
+                              <div style={{ fontSize:13, fontWeight:700 }}>{rider.rider_name}</div>
+                              <div style={{ fontSize:11, color:'#B0A396' }}>{rider.vehicle_type}</div>
                             </div>
-                            <div className="r-status">
-                              <div className="status-dot" style={{ background: isAvailable ? '#1D9E75' : '#378ADD' }} />
-                              <span style={{ color: isAvailable ? '#0F6E56' : '#185FA5', fontSize: 11 }}>
-                                {isAvailable ? 'Available' : 'En route'}
-                              </span>
+                            <div style={{
+                              display:'flex', alignItems:'center', gap:4,
+                              fontSize:11,
+                              color: isAvail ? '#1D9E75' : '#378ADD',
+                            }}>
+                              <div style={{
+                                width:7, height:7, borderRadius:'50%',
+                                background: isAvail ? '#1D9E75' : '#378ADD',
+                              }}/>
+                              {isAvail ? 'Available' : 'En route'}
                             </div>
                           </div>
                           {rider.active_order_id && (
-                            <div style={{ fontSize: 11, background: '#E6F1FB', color: '#0C447C', padding: '4px 8px', borderRadius: 6, marginBottom: 8 }}>
-                              Order #{rider.active_order_id} · {rider.latitude?.slice(0, 7)}, {rider.longitude?.slice(0, 7)}
+                            <div style={{
+                              fontSize:11, background:'#E6F1FB',
+                              color:'#0C447C', padding:'4px 8px',
+                              borderRadius:6, marginBottom:8,
+                            }}>
+                              Order #{rider.active_order_id}
                             </div>
                           )}
-                          <div className="r-stats">
-                            <div className="r-stat">
-                              <div className="r-stat-val">{rider.active_order_id ? '1' : '0'}</div>
-                              <div className="r-stat-lab">Active</div>
-                            </div>
-                            <div className="r-stat">
-                              <div className="r-stat-val">—</div>
-                              <div className="r-stat-lab">Avg time</div>
-                            </div>
-                            <div className="r-stat">
-                              <div className="r-stat-val">—</div>
-                              <div className="r-stat-lab">Rating</div>
-                            </div>
-                          </div>
-                          <div style={{ marginTop: 10 }}>
-                            {isAvailable ? (
-                              <button className="btn btn-green" style={{ width: '100%', fontSize: 12 }}>
-                                Assign order
-                              </button>
-                            ) : (
-                              <button className="btn btn-blue" style={{ width: '100%', fontSize: 12 }}>
-                                Track live
-                              </button>
-                            )}
-                          </div>
+                          <button
+                            className={`btn ${isAvail ? 'btn-green' : 'btn'}`}
+                            style={{ width:'100%', fontSize:12 }}
+                          >
+                            {isAvail ? 'Assign order' : 'Track live'}
+                          </button>
                         </div>
                       );
                     })}
@@ -386,28 +415,35 @@ export default function AdminDashboard() {
             <div className="dash-card">
               <div className="card-head">
                 <div className="card-title">All orders</div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div style={{ display:'flex', gap:8, alignItems:'center' }}>
                   <select
-                    style={{ padding: '5px 10px', border: '0.5px solid var(--gray-200)', borderRadius: 8, fontSize: 12, background: '#fff' }}
+                    style={{
+                      padding:'6px 12px',
+                      border:'1px solid #F0EBE3',
+                      borderRadius:8, fontSize:12,
+                      background:'#fff', color:'#1A1207',
+                      fontFamily:'inherit',
+                    }}
                     value={statusFilter}
                     onChange={e => setStatusFilter(e.target.value)}
                   >
                     <option value="all">All statuses</option>
                     {['pending','paid','assigned','picked_up','delivered','cancelled'].map(s => (
-                      <option key={s} value={s}>{s.replace('_', ' ')}</option>
+                      <option key={s} value={s}>{s.replace('_',' ')}</option>
                     ))}
                   </select>
-                  <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={refresh}>
+                  <button className="btn btn-primary" style={{ fontSize:12 }} onClick={refresh}>
                     Refresh
                   </button>
                 </div>
               </div>
               {loading ? (
-                <div style={{ padding: 40, textAlign: 'center', color: 'var(--gray-400)' }}>Loading...</div>
-              ) : filteredOrders.length === 0 ? (
-                <div style={{ padding: 40, textAlign: 'center', color: 'var(--gray-400)' }}>No orders found.</div>
+                <div style={{ padding:40, textAlign:'center', color:'#B0A396' }}>Loading...</div>
               ) : (
-                <OrdersTable orders={filteredOrders} onRefresh={refresh} />
+                <OrdersTable
+                  orders={statusFilter === 'all' ? orders : orders.filter(o => o.status === statusFilter)}
+                  onRefresh={refresh}
+                />
               )}
             </div>
           )}
